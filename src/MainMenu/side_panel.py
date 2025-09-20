@@ -25,6 +25,10 @@ class SidePanel(QFrame):
     # Tín hiệu thoát
     exit_requested = pyqtSignal()
 
+    member_list_requested = pyqtSignal()
+    add_member_requested = pyqtSignal()
+
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFrameShape(QFrame.StyledPanel)
@@ -35,32 +39,64 @@ class SidePanel(QFrame):
         self.layout.setContentsMargins(15, 15, 15, 15)
         self.layout.setSpacing(15)
 
-        # --- Avatar (Ảnh đại diện) ---
         self.avatar = QLabel()
         self.avatar.setFixedSize(120, 120)
-        self.layout.addWidget(self.avatar, alignment=Qt.AlignCenter)
-        self._create_circular_avatar()
+        # self.layout.addWidget(self.avatar, alignment=Qt.AlignCenter)
+        # self._create_circular_avatar()
         
-        # --- Thông tin người dùng ---
-        self.user_name_label = QLabel("Tên người dùng")
-        self.user_name_label.setObjectName("InfoValueLabel")
-        self.user_name_label.setAlignment(Qt.AlignCenter)
-        self.layout.addWidget(self.user_name_label)
+        # # --- Thông tin người dùng ---
+        # self.user_name_label = QLabel("Tên người dùng")
+        # self.user_name_label.setObjectName("InfoValueLabel")
+        # self.user_name_label.setAlignment(Qt.AlignCenter)
+        # self.layout.addWidget(self.user_name_label)
         
-        self.role_label = QLabel("Vai trò")
-        self.role_label.setObjectName("InfoValueLabel")
-        self.role_label.setAlignment(Qt.AlignCenter)
-        self.layout.addWidget(self.role_label)
+        # self.role_label = QLabel("Vai trò")
+        # self.role_label.setObjectName("InfoValueLabel")
+        # self.role_label.setAlignment(Qt.AlignCenter)
+        # self.layout.addWidget(self.role_label)
 
-        # --- Nút chuyển đổi khu vực ---
-        self.personal_btn = QPushButton("Khu vực Cá nhân")
-        self.personal_btn.setObjectName("PersonalButton")
+        # # --- Nút chuyển đổi khu vực ---
+        # self.personal_btn = QPushButton("Khu vực Cá nhân")
+        # self.personal_btn.setObjectName("PersonalButton")
+        self.avatar.setAlignment(Qt.AlignCenter)
+        self.create_circular_avatar()
+        self.layout.addWidget(self.avatar, 0, Qt.AlignCenter)
+        self.layout.addSpacing(15)
+
+        name_title_label = QLabel("TÊN")
+        self.name_value_label = QLabel("Đang tải...")
+        role_title_label = QLabel("VAI TRÒ")
+        self.role_value_label = QLabel("Đang tải...")
+        self.name_value_label.setObjectName("InfoValueLabel")
+        self.role_value_label.setObjectName("InfoValueLabel")
+        self.layout.addWidget(name_title_label)
+        self.layout.addWidget(self.name_value_label)
+        self.layout.addSpacing(10)
+        self.layout.addWidget(role_title_label)
+        self.layout.addWidget(self.role_value_label)
+        self.layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
+        self.personal_btn = QPushButton("KHU VỰC CÁ NHÂN")
+        self.group_btn = QPushButton("KHU VỰC NHÓM")
+
         self.layout.addWidget(self.personal_btn)
 
-        self.group_btn = QPushButton("Khu vực Nhóm")
-        self.group_btn.setObjectName("GroupButton")
+        # self.group_btn = QPushButton("Khu vực Nhóm")
+        # self.group_btn.setObjectName("GroupButton")
         self.layout.addWidget(self.group_btn)
+
+        self.member_list_btn = QPushButton("Danh sách thành viên")
+        self.add_member_btn = QPushButton("Thêm thành viên")
+        self.layout.addWidget(self.member_list_btn)
+        self.layout.addWidget(self.add_member_btn)
         
+        
+        self.member_list_btn.hide()
+        self.add_member_btn.hide()
+        
+        self.layout.addStretch(1)
+        
+
         # Thêm một khoảng phân cách
         self.layout.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Minimum, QSizePolicy.Fixed))
         
@@ -88,15 +124,23 @@ class SidePanel(QFrame):
         self.home_button.clicked.connect(self.home_requested.emit)
         self.calendar_button.clicked.connect(self.calendar_requested.emit)
         self.exit_button.clicked.connect(self.exit_requested.emit)
+        self.member_list_btn.clicked.connect(self.member_list_requested.emit)
+        self.add_member_btn.clicked.connect(self.add_member_requested.emit)
         
-        self.update_view_buttons(area='personal', content='home')
+        self.update_view('personal')
+
+        
+
+        # self.exit_btn = QPushButton("EXIT")
+        # self.exit_btn.setObjectName("ExitButton")
+        # self.layout.addWidget(self.exit_btn)
         
     def set_user_info(self, user_name, role):
         """
             Thiết lập thông tin tên và vai trò của người dùng.
         """
-        self.user_name_label.setText(user_name)
-        self.role_label.setText(role)
+        self.name_value_label.setText(user_name)
+        self.role_value_label.setText(role)
         
     def _create_circular_avatar(self):
         """
@@ -105,43 +149,29 @@ class SidePanel(QFrame):
         pixmap = QPixmap(self.avatar.size())
         pixmap.fill(Qt.transparent)
         
+
+    def update_view(self, view_mode, is_leader=False):
+        """Chỉ cần enable/disable các nút, CSS sẽ tự xử lý giao diện."""
+        if view_mode == 'personal':
+            self.personal_btn.setEnabled(False)
+            self.group_btn.setEnabled(True)
+            self.member_list_btn.hide()
+            self.add_member_btn.hide()
+        elif view_mode == 'group':
+            self.personal_btn.setEnabled(True)
+            self.group_btn.setEnabled(False)
+            self.member_list_btn.show()
+            self.add_member_btn.setVisible(is_leader)
+
+    def create_circular_avatar(self):
+        pixmap = QPixmap(self.avatar.size())
+        pixmap.fill(Qt.transparent)
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setBrush(QBrush(QColor("#cccccc")))
         painter.setPen(Qt.NoPen)
         painter.drawEllipse(0, 0, self.avatar.width(), self.avatar.height())
-        painter.end()
-        
+        painter.end()  
         self.avatar.setPixmap(pixmap)
         
-    def update_view_buttons(self, area, content=None):
-        """
-            Cập nhật giao diện của các nút điều hướng để làm nổi bật khu vực/nội dung đang hoạt động.
-            - area: 'personal' hoặc 'group'
-            - content: 'home' hoặc 'calendar'
-        """
-        normal_style = """
-            background-color: #ffffff; 
-            border: 1px solid #c0c0c0; 
-            border-radius: 15px; 
-            padding: 10px; 
-            font-weight: bold;
-        """
-        
-        active_style = """
-            background-color: #e0e0e0;
-            color: #888888;
-            border: 1px solid #b0b0b0; 
-            border-radius: 15px; 
-            padding: 10px; 
-            font-weight: bold;
-        """
-        
-        # Cập nhật style cho các nút khu vực
-        self.personal_btn.setStyleSheet(active_style if area == 'personal' else normal_style)
-        self.group_btn.setStyleSheet(active_style if area == 'group' else normal_style)
-        
-        # Cập nhật style cho các nút nội dung
-        if content:
-            self.home_button.setStyleSheet(active_style if content == 'home' else normal_style)
-            self.calendar_button.setStyleSheet(active_style if content == 'calendar' else normal_style)
+  
