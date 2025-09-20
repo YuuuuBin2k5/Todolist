@@ -1,0 +1,17 @@
+# --- Cấu hình Kích thước và Vị trí ---
+CONTAINER_WIDTH = 900
+CONTAINER_HEIGHT = 500
+FORM_WIDTH = CONTAINER_WIDTH // 2
+TOGGLE_PANEL_WIDTH = FORM_WIDTH
+
+# --- Cấu hình Thời gian Animation ---
+ANIMATION_DURATION_MS = 300
+
+# --- Cấu hình Màu sắc (Hex Codes) ---
+COLOR_WHITE = "#FFFFFF"
+COLOR_PRIMARY_BLUE = "#5c6bc0"
+COLOR_SECONDARY_BLUE = "#2da0a8"
+COLOR_PRIMARY_BLUE_PURPLE = "#3f51b5"
+COLOR_SECONDARY_BLUE_PURPLE = "#673ab7"
+COLOR_GRAY = "#cccccc"
+COLOR_SHADOW = "rgba(0, 0, 0, 0.35)"
