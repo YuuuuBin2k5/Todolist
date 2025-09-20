@@ -5,8 +5,7 @@
 import sys
 import sqlite3
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QMessageBox
-# Thêm LoginRegisterApp để có thể gọi lại giao diện Login khi người dùng nhấn Exit
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QMessageBox
+
 # Import các lớp widget đã được module hóa từ các file khác
 from MainMenu.side_panel import SidePanel
 from MainMenu.calendar_widget import CalendarWidget
@@ -103,20 +102,28 @@ class MainWindow(QMainWindow):
         self.user_id = user_data[0]
         self.user_name = user_data[1]
         self.default_role = "Quản trị viên"
-        # Biến này sẽ giữ tham chiếu đến cửa sổ đăng nhập để nó không bị xóa
+
         self.login_window = None
+        # [THÊM MỚI] Thêm cờ để kiểm soát việc đăng xuất
+        self._is_logging_out = False
+
         self.setWindowTitle("Dashboard - Calendar")
         self.setGeometry(100, 100, 1400, 900)
-        self.setObjectName("MainWindow") # Đặt tên để áp dụng CSS
-        self.setStyleSheet(STYLESHEET) # Áp dụng CSS cho cửa sổ và các widget con của nó
+        self.setObjectName("MainWindow")
+        self.setStyleSheet(STYLESHEET)
         
         self.initUI()
         self._handle_personal_view()
-    # sự kiện đóng cửa sổ
+
     def closeEvent(self, event):
         """
-        Hiển thị hộp thoại xác nhận khi người dùng cố gắng đóng cửa sổ chính.
+        Hiển thị hộp thoại xác nhận khi người dùng cố gắng đóng cửa sổ chính bằng nút X.
         """
+        # [THAY ĐỔI] Chỉ hiển thị hộp thoại nếu không phải đang đăng xuất
+        if self._is_logging_out:
+            event.accept()
+            return
+
         reply = QMessageBox.question(
             self,
             "Xác nhận Thoát",
@@ -126,63 +133,52 @@ class MainWindow(QMainWindow):
         )
 
         if reply == QMessageBox.Yes:
-            event.accept()  # Chấp nhận sự kiện đóng
+            event.accept()
         else:
-            event.ignore()  # Bỏ qua sự kiện đóng  
+            event.ignore()
+
     def _prompt_for_exit(self):
         """
-        Hiển thị một hộp thoại hỏi người dùng có chắc chắn muốn đăng xuất không.
+        Hàm này giờ chỉ xử lý việc đăng xuất (Sign Out).
         """
-        # Tạo hộp thoại câu hỏi
         reply = QMessageBox.question(
             self,
-            "Xác nhận Đăng xuất",  # Tiêu đề của hộp thoại
-            "Bạn có chắc chắn muốn đăng xuất không?",  # Nội dung câu hỏi
-            QMessageBox.Yes | QMessageBox.No,  # Các nút lựa chọn
-            QMessageBox.No  # Nút được chọn mặc định
+            "Xác nhận Đăng xuất",
+            "Bạn có chắc chắn muốn đăng xuất không?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
         )
-        #  Nếu người dùng chọn "Yes" thì quay về màn hình đăng nhập
+
         if reply == QMessageBox.Yes:
             from login import LoginRegisterApp
-            # Đóng cửa sổ hiện tại
+            # [THAY ĐỔI] Đặt cờ thành True trước khi đóng
+            self._is_logging_out = True
             self.close()
-            # Tạo và hiển thị lại cửa sổ đăng nhập
             self.login_window = LoginRegisterApp()
             self.login_window.show()
+
     def initUI(self):
-        # Tạo một widget trung tâm để chứa layout chính
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         
-        # Bố cục chính của cửa sổ là layout ngang (QHBoxLayout)
         main_layout = QHBoxLayout(self.central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0) # Xóa mọi khoảng đệm ở viền
-        main_layout.setSpacing(0) # Xóa khoảng cách giữa các widget con
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        # --- Lắp ráp các thành phần ---
-
-        # 1. Tạo một thực thể của SidePanel và thêm vào bên trái layout
         self.side_panel = SidePanel()
         main_layout.addWidget(self.side_panel)
         
-        # 2. Tạo một thực thể của CalendarWidget và thêm vào bên phải layout
         self.calendar = CalendarWidget()
-        # Thêm calendar với hệ số co giãn là 1. Điều này làm cho nó chiếm hết không gian
-        # còn lại theo chiều ngang, trong khi SidePanel có chiều rộng cố định.
         main_layout.addWidget(self.calendar, 1)
 
-        # Giao diện personal
         self.side_panel.personal_area_requested.connect(self._handle_personal_view)
         self.side_panel.group_area_requested.connect(self._handle_group_view)
 
-        # --- Kết nối tín hiệu (Signals) và hành động (Slots) ---
-        # Khi nút exit_btn trong side_panel được nhấn (clicked), gọi hàm close() của cửa sổ chính.
         self.side_panel.exit_btn.clicked.connect(self._prompt_for_exit)
 
     def _handle_personal_view(self):
         print("Chuyển sang khu vực cá nhân...")
         self.side_panel.set_user_info(self.user_name, self.default_role)
-        # Làm mờ nút
         self.side_panel.update_view_buttons('personal')
 
     def _handle_group_view(self):
@@ -215,5 +211,3 @@ class MainWindow(QMainWindow):
             conn.close()
         except sqlite3.Error as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Không thể truy vấn vai trò nhóm: {e}")
-
-
