@@ -19,7 +19,7 @@ if __name__ == "__main__":
                 font-family: 'Times New Roman', serif;
             }}
             QPushButton {{
-                cursor: pointer;
+                cursor: pointhuyer;
             }}
         """)
     else:

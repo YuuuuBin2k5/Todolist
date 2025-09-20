@@ -5,7 +5,7 @@ from PyQt5.QtGui import QFont, QColor, QPalette, QPixmap, QFontDatabase
 import sqlite3 # Import thư viện SQL
 # Import các hằng số từ file config.py.
 from config import *
-from MainMenu.main_windows import MainWindow
+from MainMenu.main_window import MainWindow
 
 class LoginRegisterApp(QMainWindow):
     def __init__(self):

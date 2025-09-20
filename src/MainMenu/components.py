@@ -246,11 +246,37 @@ class DayWidget(QFrame):
         self.date_label = QLabel(date_text)
         self.date_label.setObjectName("DateLabel")
         self.date_label.setAlignment(Qt.AlignRight) # Căn lề phải cho đẹp
+        # Đảm bảo label không có nền đè lên highlight của ô
+        self.date_label.setStyleSheet("background: transparent;")
         self.main_layout.addWidget(self.date_label)
 
         # Layout dọc con để chứa danh sách các công việc
         self.tasks_layout = QVBoxLayout()
         self.main_layout.addLayout(self.tasks_layout)
+
+    def _prompt_for_new_task(self):
+        task_text, ok = QInputDialog.getText(self, "Công việc mới", "Nhập tên công việc:")
+        if ok and task_text:
+            # Khi thêm mới, ghi chú mặc định là rỗng
+            new_task = TaskWidget(task_text, note="")
+            self.add_task(new_task)
+
+    # -- thêm phương thức highlight cho ngày hiện tại --
+    def set_today_highlight(self, enabled=True):
+        """
+            Đặt nền đỏ mờ cho ô ngày nếu enabled=True,
+            hoặc xóa style trả về mặc định nếu enabled=False.
+        """
+        if enabled:
+            # rgba alpha 60 ~ mờ nhẹ; bo góc để đẹp
+            self.setStyleSheet(
+                "background-color: rgba(255, 0, 0, 60);"
+                "border-radius: 6px;"
+                "padding: 4px;"
+            )
+        else:
+            # Xóa style (trả về mặc định)
+            self.setStyleSheet("")
 
     # Thêm sự kiện nháy đúp chuột
     def mouseDoubleClickEvent(self, event):
