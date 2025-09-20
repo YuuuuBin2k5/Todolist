@@ -8,12 +8,15 @@
 
 from PyQt5.QtWidgets import QFrame, QVBoxLayout, QLabel, QPushButton, QSpacerItem, QSizePolicy
 from PyQt5.QtGui import QPainter, QBrush, QColor, QPixmap
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 
 class SidePanel(QFrame):
     """
         Thanh điều hướng bên trái, chứa thông tin người dùng và các nút chức năng chính.
     """
+    personal_area_requested = pyqtSignal()
+    group_area_requested = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         # Đặt kiểu khung để có viền
@@ -34,23 +37,26 @@ class SidePanel(QFrame):
         self.create_circular_avatar() # Gọi hàm vẽ avatar hình tròn
         # Thêm avatar vào layout, căn giữa theo chiều ngang
         self.layout.addWidget(self.avatar, 0, Qt.AlignCenter)
+        self.layout.addSpacing(15)
 
         # --- Thông tin Tên và Vai trò ---
         name_title_label = QLabel("TÊN")
-        name_value_label = QLabel("Nguyễn Văn A")
+        self.name_value_label = QLabel("Đang tải...")
+        
         role_title_label = QLabel("VAI TRÒ")
-        role_value_label = QLabel("Quản trị viên")
+        self.role_value_label = QLabel("Đang tải...")
+
 
         # Đặt tên object cho các label giá trị để style bằng CSS
-        name_value_label.setObjectName("InfoValueLabel")
-        role_value_label.setObjectName("InfoValueLabel")
+        self.name_value_label.setObjectName("InfoValueLabel")
+        self.role_value_label.setObjectName("InfoValueLabel")
         
         # Thêm các label vào layout
         self.layout.addWidget(name_title_label)
-        self.layout.addWidget(name_value_label)
-        self.layout.addSpacing(10) # Thêm khoảng trống
+        self.layout.addWidget(self.name_value_label)
+        self.layout.addSpacing(10)
         self.layout.addWidget(role_title_label)
-        self.layout.addWidget(role_value_label)
+        self.layout.addWidget(self.role_value_label)
         
         # Thêm một khoảng trống co giãn để đẩy các nút chức năng xuống dưới
         self.layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
@@ -58,6 +64,9 @@ class SidePanel(QFrame):
         # --- Các nút điều hướng chức năng ---
         self.personal_btn = QPushButton("KHU VỰC CÁ NHÂN")
         self.group_btn = QPushButton("KHU VỰC NHÓM")
+
+        self.personal_btn.clicked.connect(self.personal_area_requested.emit)
+        self.group_btn.clicked.connect(self.group_area_requested.emit)
         
         self.layout.addWidget(self.personal_btn)
         self.layout.addWidget(self.group_btn)
@@ -70,6 +79,10 @@ class SidePanel(QFrame):
         self.exit_btn = QPushButton("EXIT")
         self.exit_btn.setObjectName("ExitButton") # Đặt tên riêng để style khác biệt
         self.layout.addWidget(self.exit_btn)
+
+    def set_user_info(self, user_name, user_role):
+        self.name_value_label.setText(user_name)
+        self.role_value_label.setText(user_role)
 
     def create_circular_avatar(self):
         """
