@@ -307,23 +307,3 @@ class LoginRegisterApp(QMainWindow):
         self.animation_form.start()
         self.animation_toggle.start()
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-
-     # Thêm phông chữ từ file .ttf
-    font_id = QFontDatabase.addApplicationFont("./assets/fonts/Times_New_Roman.ttf")
-    
-    # Lấy tên phông chữ từ id
-    font_families = QFontDatabase.applicationFontFamilies(font_id)
-    if font_families:
-        app.setStyleSheet(f"""
-            QWidget {{
-                font-family: '{font_families[0]}', serif;
-            }}
-            QPushButton {{
-                cursor: pointer;
-            }}
-        """)
-    window = LoginRegisterApp()
-    window.show()
-    sys.exit(app.exec_())
