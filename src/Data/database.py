@@ -1,9 +1,20 @@
 import sqlite3
+import os
 
-# Kết nối tới DB
-conn = sqlite3.connect("todolist_database.db")
+# --- PHIÊN BẢN ĐÃ SỬA LỖI - LUÔN TẠO FILE ĐÚNG CHỖ ---
+
+# Lấy đường dẫn tuyệt đối đến thư mục chứa file script này (thư mục Data)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Tạo đường dẫn đầy đủ đến file database, nằm cùng thư mục với script
+db_path = os.path.join(current_dir, 'todolist_database.db')
+
+print(f"Sẽ tạo database tại: {db_path}")
+
+# Kết nối tới DB bằng đường dẫn đầy đủ và chính xác
+conn = sqlite3.connect(db_path)
+
 cursor = conn.cursor()
-
 # 1. Bảng User
 print("Đang tạo bảng users...")
 cursor.execute("""

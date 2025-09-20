@@ -1,16 +1,23 @@
-"""
-    Cửa sổ chính chạy Main Menu
-"""
-
-import sys
+import os
 import sqlite3
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QMessageBox
-
-# Import các lớp widget đã được module hóa từ các file khác
 from MainMenu.side_panel import SidePanel
 from MainMenu.calendar_widget import CalendarWidget
 from PyQt5.QtGui import QFont, QFontDatabase
+from PyQt5.QtCore import QTimer
 
+# [SỬA 1] THÊM HÀM TRỢ GIÚP NÀY VÀO ĐẦU FILE
+def _find_database_path():
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        src_dir = os.path.dirname(current_dir)
+        db_path = os.path.join(src_dir, 'Data', 'todolist_database.db')
+        if not os.path.exists(db_path):
+            raise FileNotFoundError(f"Không tìm thấy file database tại: {db_path}")
+        return db_path
+    except Exception as e:
+        print(f"LỖI NGHIÊM TRỌNG: Không thể xác định đường dẫn database. {e}")
+        return None
 
 # Định nghĩa một chuỗi chứa mã CSS (QSS) để tạo kiểu cho toàn bộ ứng dụng
 STYLESHEET = """
@@ -45,7 +52,7 @@ STYLESHEET = """
         border-radius: 8px; padding: 5px; margin-bottom: 3px;
     }
     #WeekDayLabel { font-weight: bold; color: #555; padding-bottom: 5px; }
-    .DateLabel { font-size: 11px; font-weight: bold; padding: 2px; color: #333; }
+    #DateLabel { font-size: 11px; font-weight: bold; padding: 2px; color: #333; }
     
     /* Ghi đè kiểu nút bấm cho các nút trong lịch (Trước/Sau) */
     CalendarWidget QPushButton {
@@ -99,18 +106,28 @@ class MainWindow(QMainWindow):
         super().__init__(parent)
         self.user_data = user_data
         
+        # Tạo self.db_path
+        self.db_path = _find_database_path()
+        if not self.db_path:
+            QMessageBox.critical(self, "Lỗi nghiêm trọng", 
+                                 "Không tìm thấy file database. Ứng dụng không thể tiếp tục.")
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(0, self.close) 
+            return
+        
         self.user_id = user_data[0]
         self.user_name = user_data[1]
         self.default_role = "Quản trị viên"
 
         self.setWindowTitle("Dashboard - Calendar")
         self.setGeometry(100, 100, 1400, 900)
-        self.setObjectName("MainWindow") # Đặt tên để áp dụng CSS
-        self.setStyleSheet(STYLESHEET) # Áp dụng CSS cho cửa sổ và các widget con của nó
+        self.setObjectName("MainWindow")
+        self.setStyleSheet(STYLESHEET)
         
-        self.initUI()
+        self.initUI() # Dòng này gọi hàm initUI
         self._handle_personal_view()
 
+    # --- ĐẢM BẢO BẠN CÓ HÀM NÀY VÀ NÓ ĐƯỢC THỤT LỀ ĐÚNG ---
     def initUI(self):
         # Tạo một widget trung tâm để chứa layout chính
         self.central_widget = QWidget()
@@ -118,41 +135,42 @@ class MainWindow(QMainWindow):
         
         # Bố cục chính của cửa sổ là layout ngang (QHBoxLayout)
         main_layout = QHBoxLayout(self.central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0) # Xóa mọi khoảng đệm ở viền
-        main_layout.setSpacing(0) # Xóa khoảng cách giữa các widget con
-
-        # --- Lắp ráp các thành phần ---
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
         # 1. Tạo một thực thể của SidePanel và thêm vào bên trái layout
         self.side_panel = SidePanel()
         main_layout.addWidget(self.side_panel)
         
         # 2. Tạo một thực thể của CalendarWidget và thêm vào bên phải layout
-        self.calendar = CalendarWidget()
-        # Thêm calendar với hệ số co giãn là 1. Điều này làm cho nó chiếm hết không gian
-        # còn lại theo chiều ngang, trong khi SidePanel có chiều rộng cố định.
+        self.calendar = CalendarWidget(user_id=self.user_id, db_path=self.db_path)
         main_layout.addWidget(self.calendar, 1)
 
-        # Giao diện personal
+        # Kết nối tín hiệu từ side_panel
         self.side_panel.personal_area_requested.connect(self._handle_personal_view)
         self.side_panel.group_area_requested.connect(self._handle_group_view)
-
-        # --- Kết nối tín hiệu (Signals) và hành động (Slots) ---
-        # Khi nút exit_btn trong side_panel được nhấn (clicked), gọi hàm close() của cửa sổ chính.
         self.side_panel.exit_btn.clicked.connect(self.close)
+    # ------------------------------------------------------------------
 
     def _handle_personal_view(self):
         print("Chuyển sang khu vực cá nhân...")
         self.side_panel.set_user_info(self.user_name, self.default_role)
-        # Làm mờ nút
         self.side_panel.update_view_buttons('personal')
+        
+        # [THAY ĐỔI] Ra lệnh cho calendar chuyển chế độ
+        self.calendar.switch_view_mode('personal')
 
     def _handle_group_view(self):
         print("Chuyển sang khu vực nhóm...")
         self.side_panel.update_view_buttons('group')
+        
+        # [THAY ĐỔI] Ra lệnh cho calendar chuyển chế độ
+        self.calendar.switch_view_mode('group')
+
+        # Phần code kiểm tra vai trò leader/thành viên vẫn giữ nguyên
         group_role = "Thành viên" 
         try:
-            conn = sqlite3.connect("todolist_database.db")
+            conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
             cursor.execute("SELECT group_id FROM group_members WHERE user_id = ? LIMIT 1", (self.user_id,))
@@ -164,10 +182,8 @@ class MainWindow(QMainWindow):
                 cursor.execute("SELECT leader_id FROM groups WHERE group_id = ?", (group_id,))
                 leader_result = cursor.fetchone()
 
-                if leader_result:
-                    leader_id = leader_result[0]
-                    if self.user_id == leader_id:
-                        group_role = "Quản trị viên"
+                if leader_result and self.user_id == leader_result[0]:
+                    group_role = "Quản trị viên"
                 
                 self.side_panel.set_user_info(self.user_name, group_role)
             else:
@@ -177,5 +193,3 @@ class MainWindow(QMainWindow):
             conn.close()
         except sqlite3.Error as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Không thể truy vấn vai trò nhóm: {e}")
-
-
