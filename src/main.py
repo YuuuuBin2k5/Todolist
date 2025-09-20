@@ -20,7 +20,7 @@ if __name__ == "__main__":
                 font-family: 'Segoe UI', 'Arial', 'DejaVu Sans', sans-serif;
             }}
             QPushButton {{
-                cursor: pointer;
+                cursor: pointhuyer;
             }}
         """)
     else:

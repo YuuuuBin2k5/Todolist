@@ -103,6 +103,7 @@ class CalendarWidget(QWidget):
         month_calendar = calendar.monthcalendar(self.current_date.year, self.current_date.month)
         
         # Duyệt qua từng tuần và từng ngày để tạo DayWidget
+        today = datetime.now()
         for week_num, week_data in enumerate(month_calendar):
             for day_num, day_data in enumerate(week_data):
                 # Chỉ tạo widget cho những ngày khác 0
@@ -112,6 +113,13 @@ class CalendarWidget(QWidget):
                         self.current_date.year, 
                         self.current_date.month
                     )
+                    # Nếu là ngày hiện tại, gọi highlight trên DayWidget
+                    if(self.current_date.year == today.year and
+                       self.current_date.month == today.month and
+                       day_data == today.day):
+                        day_widget.set_today_highlight(True)
+                        
+
                     # Thêm widget ngày vào lưới tại đúng vị trí hàng (tuần) và cột (thứ)
                     self.grid_layout.addWidget(day_widget, week_num + 1, day_num) # +1 vì hàng 0 là tiêu đề
         

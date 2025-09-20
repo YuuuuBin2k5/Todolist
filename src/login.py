@@ -11,7 +11,7 @@ from PyQt5.QtCore import Qt, QPropertyAnimation, QPoint
 # [THAY ĐỔI] Thêm QFont vào đây
 from PyQt5.QtGui import QPixmap, QFont 
 from config import *
-from MainMenu.main_windows import MainWindow
+from MainMenu.main_window import MainWindow
 
 # ==========================================================================================
 # LỚP DIALOG MỚI CHO CHỨC NĂNG QUÊN MẬT KHẨU
