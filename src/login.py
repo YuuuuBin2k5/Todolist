@@ -243,7 +243,7 @@ class LoginRegisterApp(QMainWindow):
         print(password)
         
         try:
-            # Thay thế 'your_database.db' bằng đường dẫn tới CSDL của bạn
+            # Thay thế 'todolist_database.db' bằng đường dẫn tới CSDL của bạn
             with sqlite3.connect('todolist_database.db') as conn:
                 cursor = conn.cursor()
                 # Kiểm tra thông tin đăng nhập với tên cột chính xác.
@@ -271,11 +271,11 @@ class LoginRegisterApp(QMainWindow):
             return
 
         try:
-            # Thay thế 'your_database.db' bằng đường dẫn tới CSDL của bạn
+            # Thay thế 'todolist_database.db' bằng đường dẫn tới CSDL của bạn
             with sqlite3.connect('todolist_database.db') as conn:
                 cursor = conn.cursor()
                 # Thêm dữ liệu vào bảng với tên cột chính xác.
-                cursor.execute("INSERT INTO users (name, email, password) VALUES (?, ?, ?)", (name, email, password))
+                cursor.execute("INSERT INTO users (user_name, email, user_password) VALUES (?, ?, ?)", (name, email, password))
                 conn.commit()
                 QMessageBox.information(self, "Thành công", "Đăng ký thành công! Vui lòng đăng nhập.")
                 self.show_sign_in()
