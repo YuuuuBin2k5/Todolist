@@ -5,7 +5,8 @@
 import sys
 import sqlite3
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QMessageBox
-
+# Thêm LoginRegisterApp để có thể gọi lại giao diện Login khi người dùng nhấn Exit
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QMessageBox
 # Import các lớp widget đã được module hóa từ các file khác
 from MainMenu.side_panel import SidePanel
 from MainMenu.calendar_widget import CalendarWidget
@@ -102,7 +103,8 @@ class MainWindow(QMainWindow):
         self.user_id = user_data[0]
         self.user_name = user_data[1]
         self.default_role = "Quản trị viên"
-
+        # Biến này sẽ giữ tham chiếu đến cửa sổ đăng nhập để nó không bị xóa
+        self.login_window = None
         self.setWindowTitle("Dashboard - Calendar")
         self.setGeometry(100, 100, 1400, 900)
         self.setObjectName("MainWindow") # Đặt tên để áp dụng CSS
@@ -110,7 +112,43 @@ class MainWindow(QMainWindow):
         
         self.initUI()
         self._handle_personal_view()
+    # sự kiện đóng cửa sổ
+    def closeEvent(self, event):
+        """
+        Hiển thị hộp thoại xác nhận khi người dùng cố gắng đóng cửa sổ chính.
+        """
+        reply = QMessageBox.question(
+            self,
+            "Xác nhận Thoát",
+            "Bạn có chắc chắn muốn thoát khỏi ứng dụng chứ?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
 
+        if reply == QMessageBox.Yes:
+            event.accept()  # Chấp nhận sự kiện đóng
+        else:
+            event.ignore()  # Bỏ qua sự kiện đóng  
+    def _prompt_for_exit(self):
+        """
+        Hiển thị một hộp thoại hỏi người dùng có chắc chắn muốn đăng xuất không.
+        """
+        # Tạo hộp thoại câu hỏi
+        reply = QMessageBox.question(
+            self,
+            "Xác nhận Đăng xuất",  # Tiêu đề của hộp thoại
+            "Bạn có chắc chắn muốn đăng xuất không?",  # Nội dung câu hỏi
+            QMessageBox.Yes | QMessageBox.No,  # Các nút lựa chọn
+            QMessageBox.No  # Nút được chọn mặc định
+        )
+        #  Nếu người dùng chọn "Yes" thì quay về màn hình đăng nhập
+        if reply == QMessageBox.Yes:
+            from login import LoginRegisterApp
+            # Đóng cửa sổ hiện tại
+            self.close()
+            # Tạo và hiển thị lại cửa sổ đăng nhập
+            self.login_window = LoginRegisterApp()
+            self.login_window.show()
     def initUI(self):
         # Tạo một widget trung tâm để chứa layout chính
         self.central_widget = QWidget()
@@ -139,7 +177,7 @@ class MainWindow(QMainWindow):
 
         # --- Kết nối tín hiệu (Signals) và hành động (Slots) ---
         # Khi nút exit_btn trong side_panel được nhấn (clicked), gọi hàm close() của cửa sổ chính.
-        self.side_panel.exit_btn.clicked.connect(self.close)
+        self.side_panel.exit_btn.clicked.connect(self._prompt_for_exit)
 
     def _handle_personal_view(self):
         print("Chuyển sang khu vực cá nhân...")
