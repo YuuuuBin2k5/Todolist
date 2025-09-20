@@ -4,6 +4,7 @@
     Đây là file đã được hợp nhất từ hai phiên bản có xung đột.
 """
 
+import os
 import sys
 import sqlite3
 import json
@@ -20,7 +21,22 @@ from MainMenu.home_page import HomePageWidget
 from MainMenu.group_dialogs import GroupSelectionDialog, MemberListDialog, AddMemberDialog
 from config import *
 
+# [SỬA 1] THÊM HÀM TRỢ GIÚP NÀY VÀO ĐẦU FILE
+def _find_database_path():
+    """Hàm trợ giúp để tìm đường dẫn tuyệt đối đến file database."""
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        src_dir = os.path.dirname(current_dir)
+        db_path = os.path.join(src_dir, 'Data', 'todolist_database.db')
+        if not os.path.exists(db_path):
+            raise FileNotFoundError(f"Không tìm thấy file database tại: {db_path}")
+        return db_path
+    except Exception as e:
+        print(f"LỖI NGHIÊM TRỌNG: Không thể xác định đường dẫn database. {e}")
+        return None
+
 # Định nghĩa một chuỗi chứa mã CSS (QSS) để tạo kiểu cho toàn bộ ứng dụng
+# ĐÃ HỢP NHẤT TỪ CẢ HAI FILE
 STYLESHEET = """
     /* --- Kiểu chung --- */
     #MainWindow { background-color: #f0f0f0; } /* Nền cửa sổ chính */
@@ -48,36 +64,46 @@ STYLESHEET = """
         color: #888888;
         border: 1px solid #b0b0b0;
     }
-
-    /* Stylesheet từ file thứ 2 */
+    
+    /* Style cho nút bị vô hiệu hóa */
     #SidePanel QPushButton:disabled {
         background-color: #e0e0e0;
         color: #888888;
         border-color: #b0b0b0;
     }
+
+    /* Kiểu riêng cho nút Exit */
     #ExitButton { background-color: #ffe0e0; border-color: #ffaaaa; }
     #ExitButton:hover { background-color: #ffcccc; }
+    
+    /* --- CSS cho các thành phần trong CalendarWidget --- */
     DayWidget { background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 4px; }
     TaskWidget { background-color: white; border: 1px solid #d0d0d0; border-radius: 8px; padding: 5px; margin-bottom: 3px; }
     #WeekDayLabel { font-weight: bold; color: #555; padding-bottom: 5px; }
-    .DateLabel { font-size: 11px; font-weight: bold; padding: 2px; color: #333; }
-    CalendarWidget QPushButton { background-color: #f0f0f0; border: 1px solid #c0c0c0; border-radius: 4px; padding: 5px 10px; font-weight: normal; }
+    #DateLabel { font-size: 11px; font-weight: bold; padding: 2px; color: #333; }
+    
+    /* Ghi đè kiểu nút bấm cho các nút trong lịch (Trước/Sau) */
+    CalendarWidget QPushButton { 
+        background-color: #f0f0f0; border: 1px solid #c0c0c0; 
+        border-radius: 4px; padding: 5px 10px; font-weight: normal; 
+    }
     CalendarWidget QPushButton:hover { background-color: #e0e0e0; }
     
+    /* --- CSS cho cửa sổ chi tiết ngày (DayDetailDialog) --- */
     #DayDetailDialog { background-color: #f9f9f9; }
     #DateHeaderLabel { font-size: 18px; font-weight: bold; color: #333; padding: 10px; border-bottom: 2px solid #eee; }
-    
+    #TaskDetailItem { background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin-bottom: 8px; }
+    #NoteLabelInDialog { color: #555; font-style: italic; }
+    #DayDetailDialog QPushButton { padding: 8px 16px; border-radius: 4px; background-color: #007bff; color: white; border: none; font-weight: bold; }
+    #DayDetailDialog QPushButton:hover { background-color: #0056b3; }
+
+    /* --- CSS cho tiêu đề nhóm --- */
     #GroupTitleLabel {
         font-size: 16pt;
         font-weight: bold;
         color: #444;
         padding-bottom: 2px;
     }
-
-    #TaskDetailItem { background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin-bottom: 8px; }
-    #NoteLabelInDialog { color: #555; font-style: italic; }
-    #DayDetailDialog QPushButton { padding: 8px 16px; border-radius: 4px; background-color: #007bff; color: white; border: none; font-weight: bold; }
-    #DayDetailDialog QPushButton:hover { background-color: #0056b3; }
 """
 
 class MainWindow(QMainWindow):
@@ -100,6 +126,15 @@ class MainWindow(QMainWindow):
         self.current_group_name = None
         self.is_leader_of_current_group = False
         self._is_logging_out = False
+
+        # Sử dụng hàm trợ giúp để lấy đường dẫn CSDL một cách an toàn
+        self.db_path = _find_database_path()
+        if not self.db_path:
+            QMessageBox.critical(self, "Lỗi nghiêm trọng", "Không tìm thấy file database. Ứng dụng sẽ đóng.")
+            # Dùng QTimer để đóng cửa sổ sau khi hàm __init__ hoàn tất
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(0, self.close)
+            return
 
         self.setWindowTitle("To-do List")
         self.setGeometry(100, 100, 1200, 800)
@@ -171,16 +206,14 @@ class MainWindow(QMainWindow):
         
         # Panel bên phải, chứa tiêu đề nhóm và QStackedWidget
         right_panel_layout = QVBoxLayout()
-        right_panel_layout.setContentsMargins(0, 0, 0, 0)
-        right_panel_layout.setSpacing(0)
+        right_panel_layout.setContentsMargins(10, 0, 10, 10) # Thêm chút padding
+        right_panel_layout.setSpacing(10)
 
         self.group_title_label = QLabel("Tên Nhóm")
         self.group_title_label.setObjectName("GroupTitleLabel")
         self.group_title_label.setFixedHeight(40)
         self.group_title_label.setAlignment(Qt.AlignCenter)
-        right_panel_layout.addSpacing(5)
         right_panel_layout.addWidget(self.group_title_label)
-        right_panel_layout.addSpacing(5)
         self.group_title_label.hide()
 
         # StackedWidget để chuyển đổi giữa trang chủ và lịch
@@ -194,7 +227,7 @@ class MainWindow(QMainWindow):
         self.content_stack.addWidget(self.home_widget)
 
         # Khu vực lịch
-        self.calendar_widget = CalendarWidget()
+        self.calendar_widget = CalendarWidget(self.user_id, self.db_path)
         self.content_stack.addWidget(self.calendar_widget)
 
         # Mặc định hiển thị trang chủ
@@ -217,7 +250,7 @@ class MainWindow(QMainWindow):
         self.group_title_label.show()
         
         try:
-            conn = sqlite3.connect("todolist_database.db")
+            conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute("SELECT leader_id FROM groups WHERE group_id = ?", (self.current_group_id,))
             leader_id = cursor.fetchone()[0]
@@ -235,21 +268,22 @@ class MainWindow(QMainWindow):
         """
         print("Chuyển sang khu vực cá nhân...")
         self.current_view = 'personal'
+        self.current_group_id = None # Reset thông tin nhóm
+        self.is_leader_of_current_group = False
         self.group_title_label.hide()
         self.side_panel.set_user_info(self.user_name, self.default_role)
         self.side_panel.update_view('personal', False)  # Personal view, không có leader
         
         # Cập nhật dữ liệu cho trang hiện tại
         if self.current_content == 'home':
-            self.home_widget.user_id = self.user_id
-            self.home_widget.load_data()
+            self.home_widget.switch_context(user_id=self.user_id)
         elif self.current_content == 'calendar':
             self.load_personal_tasks()
 
     def _handle_group_view(self):
         """
             Xử lý việc chuyển đổi sang chế độ xem nhóm.
-            Bây giờ sẽ mở hộp thoại để người dùng chọn nhóm.
+            Mở hộp thoại để người dùng chọn nhóm.
         """
         print("Chuyển sang khu vực nhóm...")
         dialog = GroupSelectionDialog(self.user_id, self)
@@ -258,9 +292,14 @@ class MainWindow(QMainWindow):
             self._load_group_context(group_id, group_name)
             
             # Sau khi chọn nhóm, load dữ liệu tùy thuộc vào trang đang hiển thị
-            if self.current_content == 'calendar':
+            if self.current_content == 'home':
+                self.home_widget.switch_context(group_id=group_id)
+            elif self.current_content == 'calendar':
                 self.load_group_tasks(group_id)
-            # TODO: Thêm hỗ trợ group cho home page
+        else: # Nếu người dùng hủy hoặc không chọn nhóm, quay lại view cũ
+            is_leader = self.is_leader_of_current_group if self.current_view == 'group' else False
+            self.side_panel.update_view(self.current_view, is_leader)
+
 
     def _handle_home_view(self):
         """
@@ -269,14 +308,15 @@ class MainWindow(QMainWindow):
         print("Chuyển sang trang chủ...")
         self.current_content = 'home'
         self.content_stack.setCurrentWidget(self.home_widget)
-        # Cập nhật view tùy thuộc vào current_view
         is_leader = self.is_leader_of_current_group if self.current_view == 'group' else False
         self.side_panel.update_view(self.current_view, is_leader)
         
-        # Cập nhật dữ liệu cho trang chủ
-        self.home_widget.user_id = self.user_id
-        self.home_widget.load_data()
-        
+        # Cập nhật dữ liệu cho trang chủ dựa trên ngữ cảnh hiện tại
+        if self.current_view == 'personal':
+            self.home_widget.switch_context(user_id=self.user_id)
+        elif self.current_view == 'group' and self.current_group_id:
+            self.home_widget.switch_context(group_id=self.current_group_id)
+
     def _handle_calendar_view(self):
         """
             Xử lý việc chuyển đổi sang lịch.
@@ -284,7 +324,6 @@ class MainWindow(QMainWindow):
         print("Chuyển sang lịch...")
         self.current_content = 'calendar'
         self.content_stack.setCurrentWidget(self.calendar_widget)
-        # Cập nhật view tùy thuộc vào current_view
         is_leader = self.is_leader_of_current_group if self.current_view == 'group' else False
         self.side_panel.update_view(self.current_view, is_leader)
         
@@ -310,21 +349,21 @@ class MainWindow(QMainWindow):
         """
         tasks_by_day = {}
         try:
-            conn = sqlite3.connect("todolist_database.db")
+            conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
             cursor.execute("SELECT due_at, title, is_done, note FROM tasks WHERE user_id = ?", (self.user_id,))
             tasks = cursor.fetchall()
 
             for due_at_str, title, is_done, note in tasks:
-                # Nếu có due_at, chuyển đổi chuỗi ngày tháng thành đối tượng QDate
                 if due_at_str:
                     task_date = QDate.fromString(due_at_str[:10], "yyyy-MM-dd")
-                    if task_date.year() == self.calendar_widget.current_date.year and task_date.month() == self.calendar_widget.current_date.month:
+                    if task_date.year() == self.calendar_widget.current_date.year and \
+                       task_date.month() == self.calendar_widget.current_date.month:
                         day = task_date.day()
                         if day not in tasks_by_day:
                             tasks_by_day[day] = []
-                        tasks_by_day[day].append((title, is_done, note))
+                        tasks_by_day[day].append({'title': title, 'is_done': is_done, 'note': note})
 
             self.calendar_widget.populate_calendar(tasks_by_day)
 
@@ -340,20 +379,31 @@ class MainWindow(QMainWindow):
         """
         tasks_by_day = {}
         try:
-            conn = sqlite3.connect("todolist_database.db")
+            conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            cursor.execute("SELECT due_at, title, is_done, note FROM group_tasks WHERE group_id = ?", (group_id,))
+            cursor.execute("""
+                SELECT gt.due_at, gt.title, gt.is_done, gt.note, u.user_name as assignee_name
+                FROM group_tasks gt
+                LEFT JOIN users u ON gt.assignee_id = u.user_id
+                WHERE gt.group_id = ?
+            """, (group_id,))
             tasks = cursor.fetchall()
 
-            for due_at_str, title, is_done, note in tasks:
+            for due_at_str, title, is_done, note, assignee_name in tasks:
                 if due_at_str:
                     task_date = QDate.fromString(due_at_str[:10], "yyyy-MM-dd")
-                    if task_date.year() == self.calendar_widget.current_date.year and task_date.month() == self.calendar_widget.current_date.month:
+                    if task_date.year() == self.calendar_widget.current_date.year and \
+                       task_date.month() == self.calendar_widget.current_date.month:
                         day = task_date.day()
                         if day not in tasks_by_day:
                             tasks_by_day[day] = []
-                        tasks_by_day[day].append((title, is_done, note))
+                        tasks_by_day[day].append({
+                            'title': title, 
+                            'is_done': is_done, 
+                            'note': note,
+                            'assignee_name': assignee_name or "Chưa phân công"
+                        })
 
             self.calendar_widget.populate_calendar(tasks_by_day)
 

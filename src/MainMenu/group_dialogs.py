@@ -1,7 +1,14 @@
 import sqlite3
+import os
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem, 
                              QPushButton, QInputDialog, QMessageBox, QLabel, QLineEdit)
 from PyQt5.QtCore import Qt
+
+def _get_database_path():
+    """Lấy đường dẫn tuyệt đối đến file database trong thư mục Data"""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    src_dir = os.path.dirname(current_dir)
+    return os.path.join(src_dir, 'Data', 'todolist_database.db')
 
 class GroupSelectionDialog(QDialog):
     """Cửa sổ để chọn, tạo và xem các nhóm."""
@@ -36,7 +43,7 @@ class GroupSelectionDialog(QDialog):
         """Tải danh sách các nhóm mà người dùng là thành viên."""
         self.group_list_widget.clear()
         try:
-            conn = sqlite3.connect("todolist_database.db")
+            conn = sqlite3.connect(_get_database_path())
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT g.group_id, g.group_name 
@@ -59,7 +66,7 @@ class GroupSelectionDialog(QDialog):
         group_name, ok = QInputDialog.getText(self, "Tạo Nhóm Mới", "Nhập tên nhóm:")
         if ok and group_name:
             try:
-                conn = sqlite3.connect("todolist_database.db")
+                conn = sqlite3.connect(_get_database_path())
                 cursor = conn.cursor()
                 # Thêm nhóm mới với user hiện tại là leader
                 cursor.execute("INSERT INTO groups (group_name, leader_id) VALUES (?, ?)", (group_name, self.user_id))
@@ -100,7 +107,7 @@ class MemberListDialog(QDialog):
         layout.addWidget(self.member_list)
 
         try:
-            conn = sqlite3.connect("todolist_database.db")
+            conn = sqlite3.connect(_get_database_path())
             cursor = conn.cursor()
             # Lấy tên, email của các thành viên
             cursor.execute("""
@@ -139,7 +146,7 @@ class AddMemberDialog(QDialog):
             return
 
         try:
-            conn = sqlite3.connect("todolist_database.db")
+            conn = sqlite3.connect(_get_database_path())
             cursor = conn.cursor()
             
             # Tìm user_id từ email

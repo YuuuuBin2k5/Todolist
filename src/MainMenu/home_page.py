@@ -9,6 +9,7 @@
 """
 
 import sqlite3
+import os
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
                              QLabel, QLineEdit, QCheckBox, QScrollArea, QFrame,
@@ -16,6 +17,12 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QGroupBox, QSizePolicy, QSpacerItem)
 from PyQt5.QtCore import Qt, pyqtSignal, QDate, QTimer
 from PyQt5.QtGui import QFont, QPalette, QColor, QPixmap, QPainter, QBrush
+
+def _get_database_path():
+    """Lấy đường dẫn tuyệt đối đến file database trong thư mục Data"""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    src_dir = os.path.dirname(current_dir)
+    return os.path.join(src_dir, 'Data', 'todolist_database.db')
 
 class StatsCard(QFrame):
     """Widget hiển thị thống kê dạng card"""
@@ -184,7 +191,7 @@ class TaskItemWidget(QFrame):
         
     def _update_task_in_db(self):
         try:
-            conn = sqlite3.connect("todolist_database.db")
+            conn = sqlite3.connect(_get_database_path())
             cursor = conn.cursor()
             cursor.execute("UPDATE tasks SET is_done = ? WHERE task_id = ?", 
                            (self.is_done, self.task_id))
@@ -197,7 +204,7 @@ class TaskItemWidget(QFrame):
             
     def _handle_delete(self):
         try:
-            conn = sqlite3.connect("todolist_database.db")
+            conn = sqlite3.connect(_get_database_path())
             cursor = conn.cursor()
             cursor.execute("DELETE FROM tasks WHERE task_id = ?", (self.task_id,))
             conn.commit()
@@ -554,7 +561,7 @@ class HomePageWidget(QWidget):
     def load_stats(self):
         """Tải thống kê và hiển thị"""
         try:
-            conn = sqlite3.connect("todolist_database.db")
+            conn = sqlite3.connect(_get_database_path())
             cursor = conn.cursor()
             
             # Tổng số tasks
@@ -608,7 +615,7 @@ class HomePageWidget(QWidget):
                 item.widget().setParent(None)
             
         try:
-            conn = sqlite3.connect("todolist_database.db")
+            conn = sqlite3.connect(_get_database_path())
             cursor = conn.cursor()
             
             # Lấy tasks (ưu tiên chưa hoàn thành trước)
@@ -663,7 +670,7 @@ class HomePageWidget(QWidget):
                 item.widget().setParent(None)
             
         try:
-            conn = sqlite3.connect("todolist_database.db")
+            conn = sqlite3.connect(_get_database_path())
             cursor = conn.cursor()
             
             # Lấy tasks có due_at trong 7 ngày tới
@@ -760,7 +767,7 @@ class HomePageWidget(QWidget):
             return
             
         try:
-            conn = sqlite3.connect("todolist_database.db")
+            conn = sqlite3.connect(_get_database_path())
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO tasks (user_id, title, is_done, created_at) 
