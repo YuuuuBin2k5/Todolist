@@ -78,7 +78,7 @@ class SidePanel(QFrame):
         self.layout.addItem(spacer)
 
         # --- Nút Exit ---
-        self.exit_button = QPushButton("Thoát")
+        self.exit_button = QPushButton("Sign Out")
         self.exit_button.setObjectName("ExitButton")
         self.layout.addWidget(self.exit_button)
 
