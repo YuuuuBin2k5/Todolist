@@ -125,27 +125,3 @@ class MainWindow(QMainWindow):
         # Khi nút exit_btn trong side_panel được nhấn (clicked), gọi hàm close() của cửa sổ chính.
         self.side_panel.exit_btn.clicked.connect(self.close)
 
-if __name__ == '__main__':
-
-    # Tạo đối tượng ứng dụng
-    app = QApplication(sys.argv)
-
-    # --- Tải và áp dụng font chữ với đường dẫn ĐÚNG ---
-    font_path = "assets/Fonts/BeVietnamPro-Regular.ttf"
-    
-    font_id = QFontDatabase.addApplicationFont(font_path)
-    
-    if font_id < 0:
-        print(f"LỖI: Không thể tải font từ đường dẫn: '{font_path}'")
-    else:
-        font_family = QFontDatabase.applicationFontFamilies(font_id)[0]
-        print(f"Font '{font_family}' đã được tải thành công.")
-        app_font = QFont(font_family, 8)
-        app.setFont(app_font)
-
-    # Tạo và hiển thị cửa sổ chính
-    window = MainWindow()
-    window.show()
-    
-    # Bắt đầu vòng lặp sự kiện
-    sys.exit(app.exec_())
