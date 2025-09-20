@@ -63,10 +63,10 @@ class LoginRegisterApp(QMainWindow):
         self.toggle_layout.setFixedSize(TOGGLE_PANEL_WIDTH, CONTAINER_HEIGHT)
         self.toggle_layout.setStyleSheet("background-color: transparent;")
         
-        self.toggle_left = self.create_toggle_panel("Welcome Back!", "Enter your personal details to use all of site features", "Sign In")
+        self.toggle_left = self.create_toggle_panel("Chào mừng trở lại!", "Hãy nhập thông tin cá nhân của bạn để sử dụng tất cả các tính năng của trang web nhé", "Sign In")
         self.toggle_layout.addWidget(self.toggle_left)
-        
-        self.toggle_right = self.create_toggle_panel("Hello, Friend!", "Register with your personal details to use all of site features", "Sign Up")
+
+        self.toggle_right = self.create_toggle_panel("Chào bạn!", "Hãy đăng ký với thông tin cá nhân của bạn để sử dụng tất cả các tính năng của trang web", "Sign Up")
         self.toggle_layout.addWidget(self.toggle_right)
         
         self.base_layout.addWidget(self.toggle_panel)
