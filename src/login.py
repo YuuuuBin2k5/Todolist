@@ -247,14 +247,14 @@ class LoginRegisterApp(QMainWindow):
             with sqlite3.connect('todolist_database.db') as conn:
                 cursor = conn.cursor()
                 # Kiểm tra thông tin đăng nhập với tên cột chính xác.
-                cursor.execute("SELECT * FROM users WHERE email = ? AND user_password = ?", (email, password))
+                cursor.execute( "SELECT * FROM users WHERE email = ? AND user_password = ?", (email, password))
                 user = cursor.fetchone()
                 
                 if user:
                     # Đóng cửa sổ đăng nhập hiện tại
                     self.close()
                     # Tạo và hiển thị cửa sổ chính
-                    self.main_window = MainWindow()
+                    self.main_window = MainWindow(user)
                     self.main_window.show()
                 else:
                     QMessageBox.warning(self, "Lỗi", "Email hoặc mật khẩu không đúng.")
