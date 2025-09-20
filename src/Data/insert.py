@@ -1,3 +1,4 @@
+import os
 import sqlite3
 
 # ==============================================================================
@@ -53,9 +54,9 @@ tasks_data = [
 # Định dạng: (group_id, assignee_id, 'tiêu_đề', 'ghi_chú', is_done, 'ngày_hết_hạn')
 # assignee_id: user_id của người được giao, có thể để None nếu chưa giao.
 group_tasks_data = [
-    (1, 1, 'Thiết kế Database', 'Sử dụng Sqlite3', 0, None), # Giao cho binh_tran (user_id=2)
-    (1, 2, 'Thiết kế form đăng nhập', 'Sử dụng PyQT5', 0, None),
-    (1, 3, 'Thiết kế form chính', 'Sử dụng PyQt5', 0, None)
+    (1, 1, 'Thiết kế Database', 'Sử dụng Sqlite3', 0, '2025-09-25 10:00:00'), 
+    (1, 2, 'Thiết kế form đăng nhập', 'Sử dụng PyQT5', 0, '2025-09-26 15:00:00'),
+    (1, 3, 'Thiết kế form chính', 'Sử dụng PyQt5', 0, '2025-09-27 18:00:00')
 ]
 
 
@@ -98,10 +99,12 @@ def insert_data(conn, cursor):
         conn.rollback()
 
 if __name__ == "__main__":
-    db_file = "todolist_database.db"
+    # Đường dẫn tới database nằm trong thư mục Data (cùng thư mục với script này)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    db_path = os.path.join(current_dir, 'todolist_database.db')
     connection = None
     try:
-        connection = sqlite3.connect(db_file)
+        connection = sqlite3.connect(db_path)
         db_cursor = connection.cursor()
         insert_data(connection, db_cursor)
     except sqlite3.Error as e:
