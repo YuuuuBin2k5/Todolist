@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import sys
 import sqlite3
 import random
@@ -366,15 +367,20 @@ class LoginRegisterApp(QMainWindow):
     def handle_sign_in(self):
         email = self.email_input_signin.text()
         password = self.password_input_signin.text()
+        
         try:
             with sqlite3.connect('todolist_database.db') as conn:
                 cursor = conn.cursor()
                 cursor.execute( "SELECT * FROM users WHERE email = ? AND user_password = ?", (email, password))
                 user = cursor.fetchone()
+                user_name = user[1] if user else None
+                
                 if user:
                     self._allow_close = True
                     self.close()
-                    self.main_window = MainWindow(user)
+                    # Tạo và hiển thị cửa sổ chính với user_id (index 0 của tuple)
+                    user_id = user[0]  # Lấy user_id từ kết quả query
+                    self.main_window = MainWindow(user_id, user_name)
                     self.main_window.show()
                 else:
                     QMessageBox.warning(self, "Lỗi", "Email hoặc mật khẩu không đúng.")
