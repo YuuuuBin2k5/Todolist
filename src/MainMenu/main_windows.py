@@ -5,8 +5,8 @@ import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout
 
 # Import các lớp widget đã được module hóa từ các file khác
-from side_panel import SidePanel
-from calendar_widget import CalendarWidget
+from MainMenu.side_panel import SidePanel
+from MainMenu.calendar_widget import CalendarWidget
 from PyQt5.QtGui import QFont, QFontDatabase
 
 

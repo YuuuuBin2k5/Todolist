@@ -5,6 +5,7 @@ from PyQt5.QtGui import QFont, QColor, QPalette, QPixmap
 import sqlite3 # Import thư viện SQL
 # Import các hằng số từ file config.py.
 from config import *
+from MainMenu.main_windows import MainWindow
 
 class LoginRegisterApp(QMainWindow):
     def __init__(self):
@@ -236,7 +237,12 @@ class LoginRegisterApp(QMainWindow):
                 user = cursor.fetchone()
                 
                 if user:
-                    QMessageBox.information(self, "Thành công", "Đăng nhập thành công!")
+                    # Đóng cửa sổ đăng nhập hiện tại
+                    self.close()
+                    # Tạo và hiển thị cửa sổ chính
+                    self.main_window = MainWindow()
+                    self.main_window.show()
+
                 else:
                     QMessageBox.warning(self, "Lỗi", "Email hoặc mật khẩu không đúng.")
         except sqlite3.Error as e:
@@ -253,7 +259,7 @@ class LoginRegisterApp(QMainWindow):
 
         try:
             # Thay thế 'your_database.db' bằng đường dẫn tới CSDL của bạn
-            with sqlite3.connect('your_database.db') as conn:
+            with sqlite3.connect('todolist_database.db') as conn:
                 cursor = conn.cursor()
                 cursor.execute("INSERT INTO users (name, email, password) VALUES (?, ?, ?)", (name, email, password))
                 conn.commit()
