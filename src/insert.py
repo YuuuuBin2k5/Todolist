@@ -7,11 +7,11 @@ import sqlite3
 # --- 1. Dữ liệu người dùng ---
 # Định dạng: ('tên_đăng_nhập', 'mật_khẩu')
 users_data = [
-    ('truongvi', 'tvi123'),
-    ('nhatanh', 'nanh123'),
-    ('quochuy', 'qhuy123'),
-    ('ngocmanh', 'nmanh123'),
-    ('tantai', 'ttai123'),
+    ('truongvi', 'tvi123', 'vi@mail'),
+    ('nhatanh', 'nanh123', 'anh@mail'),
+    ('quochuy', 'qhuy123', 'huy@mail'),
+    ('ngocmanh', 'nmanh123', 'manh@mail'),
+    ('tantai', 'ttai123', 'tai@mail'),
 ]
 
 # --- 2. Dữ liệu nhóm ---
@@ -68,7 +68,7 @@ def insert_data(conn, cursor):
     print("Bắt đầu chèn dữ liệu...")
     try:
         if users_data:
-            cursor.executemany("INSERT INTO users (user_name, user_password) VALUES (?, ?)", users_data)
+            cursor.executemany("INSERT INTO users (user_name, user_password, email) VALUES (?, ?, ?)", users_data)
             print(f"-> Đã chèn {len(users_data)} người dùng.")
 
         if groups_data:
