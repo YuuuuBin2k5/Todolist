@@ -58,7 +58,9 @@ class SidePanel(QFrame):
         # --- Các nút điều hướng chức năng ---
         self.personal_btn = QPushButton("KHU VỰC CÁ NHÂN")
         self.group_btn = QPushButton("KHU VỰC NHÓM")
-        
+        # nút thay đổi widget
+        self.month_view_btn = QPushButton("📅 Xem theo tháng")
+        self.week_view_btn = QPushButton("🗓️ Xem theo tuần")
         self.layout.addWidget(self.personal_btn)
         self.layout.addWidget(self.group_btn)
         

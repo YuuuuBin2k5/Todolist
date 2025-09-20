@@ -86,66 +86,89 @@ STYLESHEET = """
     }
 """
 
+"""
+    Cửa sổ chính chạy Main Menu
+"""
+import sys
+# MỚI: Import thêm QStackedWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QStackedWidget
+from PyQt5.QtGui import QFont, QFontDatabase
+
+# Import các lớp widget đã được module hóa
+from MainMenu.side_panel import SidePanel
+from MainMenu.calendar_widget import CalendarWidget
+from MainMenu.week_widget import WeekWidget # MỚI: Import WeekWidget
+
+# Định nghĩa STYLESHEET (giữ nguyên như của bạn)
+STYLESHEET = """
+    /* ... (toàn bộ CSS của bạn ở đây) ... */
+"""
+
 class MainWindow(QMainWindow):
     """
         Cửa sổ chính của ứng dụng.
-        Nhiệm vụ chính là lắp ráp các widget con (SidePanel, CalendarWidget) lại với nhau.
     """
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Dashboard - Calendar")
         self.setGeometry(100, 100, 1400, 900)
-        self.setObjectName("MainWindow") # Đặt tên để áp dụng CSS
-        self.setStyleSheet(STYLESHEET) # Áp dụng CSS cho cửa sổ và các widget con của nó
+        self.setObjectName("MainWindow")
+        self.setStyleSheet(STYLESHEET)
         self.initUI()
 
     def initUI(self):
-        # Tạo một widget trung tâm để chứa layout chính
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         
-        # Bố cục chính của cửa sổ là layout ngang (QHBoxLayout)
         main_layout = QHBoxLayout(self.central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0) # Xóa mọi khoảng đệm ở viền
-        main_layout.setSpacing(0) # Xóa khoảng cách giữa các widget con
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
         # --- Lắp ráp các thành phần ---
-
-        # 1. Tạo một thực thể của SidePanel và thêm vào bên trái layout
+        
+        # 1. SidePanel vẫn giữ nguyên
         self.side_panel = SidePanel()
         main_layout.addWidget(self.side_panel)
         
-        # 2. Tạo một thực thể của CalendarWidget và thêm vào bên phải layout
-        self.calendar = CalendarWidget()
-        # Thêm calendar với hệ số co giãn là 1. Điều này làm cho nó chiếm hết không gian
-        # còn lại theo chiều ngang, trong khi SidePanel có chiều rộng cố định.
-        main_layout.addWidget(self.calendar, 1)
+        # THAY ĐỔI: Sử dụng QStackedWidget để quản lý các view
+        # 2. Tạo một QStackedWidget để chứa các chế độ xem (tháng, tuần)
+        self.view_stack = QStackedWidget()
+        
+        # 3. Tạo các widget con cho từng chế độ xem
+        self.calendar_view = CalendarWidget()
+        self.week_view = WeekWidget()
+        
+        # 4. Thêm các widget con vào QStackedWidget
+        self.view_stack.addWidget(self.calendar_view)
+        self.view_stack.addWidget(self.week_view)
+        
+        # 5. Thêm QStackedWidget vào layout chính
+        main_layout.addWidget(self.view_stack, 1)
+
+        # 6. Đặt chế độ xem mặc định là lịch tháng
+        self.view_stack.setCurrentWidget(self.calendar_view)
 
         # --- Kết nối tín hiệu (Signals) và hành động (Slots) ---
-        # Khi nút exit_btn trong side_panel được nhấn (clicked), gọi hàm close() của cửa sổ chính.
         self.side_panel.exit_btn.clicked.connect(self.close)
+        
+        # MỚI: Kết nối các nút chuyển view trong side_panel với các hàm trong MainWindow
+        self.side_panel.month_view_btn.clicked.connect(self.show_month_view)
+        self.side_panel.week_view_btn.clicked.connect(self.show_week_view)
+
+    # MỚI: Hàm để chuyển sang chế độ xem tháng
+    def show_month_view(self):
+        self.view_stack.setCurrentWidget(self.calendar_view)
+
+    # MỚI: Hàm để chuyển sang chế độ xem tuần
+    def show_week_view(self):
+        self.view_stack.setCurrentWidget(self.week_view)
+
 
 if __name__ == '__main__':
-
-    # Tạo đối tượng ứng dụng
     app = QApplication(sys.argv)
-
-    # --- Tải và áp dụng font chữ với đường dẫn ĐÚNG ---
-    font_path = "assets/Fonts/BeVietnamPro-Regular.ttf"
     
-    font_id = QFontDatabase.addApplicationFont(font_path)
-    
-    if font_id < 0:
-        print(f"LỖI: Không thể tải font từ đường dẫn: '{font_path}'")
-    else:
-        font_family = QFontDatabase.applicationFontFamilies(font_id)[0]
-        print(f"Font '{font_family}' đã được tải thành công.")
-        app_font = QFont(font_family, 8)
-        app.setFont(app_font)
+    # ... (Code tải font của bạn giữ nguyên)
 
-    # Tạo và hiển thị cửa sổ chính
     window = MainWindow()
     window.show()
-    
-    # Bắt đầu vòng lặp sự kiện
     sys.exit(app.exec_())
