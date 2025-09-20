@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QStackedWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
 from PyQt5.QtCore import Qt, QPropertyAnimation, QPoint, QSize
-from PyQt5.QtGui import QFont, QColor, QPalette, QPixmap
+from PyQt5.QtGui import QFont, QColor, QPalette, QPixmap, QFontDatabase
 import sqlite3 # Import thư viện SQL
 # Import các hằng số từ file config.py.
 from config import *
@@ -302,14 +302,21 @@ class LoginRegisterApp(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setStyleSheet("""
-        QWidget {
-            font-family: 'Times New Roman', serif;
-        }
-        QPushButton {
-            cursor: pointer;
-        }
-    """)
+
+     # Thêm phông chữ từ file .ttf
+    font_id = QFontDatabase.addApplicationFont("./assets/fonts/Times_New_Roman.ttf")
+    
+    # Lấy tên phông chữ từ id
+    font_families = QFontDatabase.applicationFontFamilies(font_id)
+    if font_families:
+        app.setStyleSheet(f"""
+            QWidget {{
+                font-family: '{font_families[0]}', serif;
+            }}
+            QPushButton {{
+                cursor: pointer;
+            }}
+        """)
     window = LoginRegisterApp()
     window.show()
     sys.exit(app.exec_())
