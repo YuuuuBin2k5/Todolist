@@ -85,9 +85,11 @@ class CalendarWidget(QWidget):
             if isinstance(widget, DayWidget):
                 widget.deleteLater() # Xóa widget một cách an toàn
                 
-    def populate_calendar(self):
+    def populate_calendar(self, tasks_by_day=None):
         """
             Vẽ lại toàn bộ lịch cho tháng hiện tại (lưu trong self.current_date).
+            Args:
+                tasks_by_day (dict): Dictionary với key là ngày (int) và value là list các task tuple
         """
         self.clear_calendar() # Xóa lịch cũ
         self.setup_week_headers() # Vẽ lại tiêu đề tuần (vì cũng bị xóa ở trên)
@@ -113,8 +115,30 @@ class CalendarWidget(QWidget):
                     # Thêm widget ngày vào lưới tại đúng vị trí hàng (tuần) và cột (thứ)
                     self.grid_layout.addWidget(day_widget, week_num + 1, day_num) # +1 vì hàng 0 là tiêu đề
         
-        # Thêm dữ liệu mẫu để minh họa
-        self.add_sample_data()
+        # Thêm dữ liệu thực từ database hoặc dữ liệu mẫu
+        if tasks_by_day:
+            self.add_tasks_from_data(tasks_by_day)
+        else:
+            self.add_sample_data()
+
+    def add_tasks_from_data(self, tasks_by_day):
+        """
+            Thêm tasks từ dữ liệu thực tế vào lịch.
+            Args:
+                tasks_by_day (dict): Dictionary với key là ngày (int) và value là list các task tuple
+        """
+        # Duyệt qua các ô trong lưới để tìm DayWidget tương ứng và thêm task
+        for row in range(1, self.grid_layout.rowCount()):
+            for col in range(self.grid_layout.columnCount()):
+                item = self.grid_layout.itemAtPosition(row, col)
+                if item and isinstance(item.widget(), DayWidget):
+                    day_widget = item.widget()
+                    day = int(day_widget.date_label.text()) # Lấy số ngày từ label
+                    if day in tasks_by_day:
+                        # Unpack cả 3 giá trị từ database: (title, is_done, note)
+                        for title, is_done, note_text in tasks_by_day[day]:
+                            # Khởi tạo TaskWidget với dữ liệu từ database
+                            day_widget.add_task(TaskWidget(title, is_done, note=note_text))
 
     def add_sample_data(self):
         """

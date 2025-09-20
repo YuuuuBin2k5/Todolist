@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QStackedWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
 from PyQt5.QtCore import Qt, QPropertyAnimation, QPoint, QSize
@@ -246,8 +247,6 @@ class LoginRegisterApp(QMainWindow):
     def handle_sign_in(self):
         email = self.email_input_signin.text()
         password = self.password_input_signin.text()
-        print(email)
-        print(password)
         
         try:
             # Thay thế 'todolist_database.db' bằng đường dẫn tới CSDL của bạn
@@ -256,12 +255,14 @@ class LoginRegisterApp(QMainWindow):
                 # Kiểm tra thông tin đăng nhập với tên cột chính xác.
                 cursor.execute( "SELECT * FROM users WHERE email = ? AND user_password = ?", (email, password))
                 user = cursor.fetchone()
+                user_name = user[1] if user else None
                 
                 if user:
                     # Đóng cửa sổ đăng nhập hiện tại
                     self.close()
-                    # Tạo và hiển thị cửa sổ chính
-                    self.main_window = MainWindow(user)
+                    # Tạo và hiển thị cửa sổ chính với user_id (index 0 của tuple)
+                    user_id = user[0]  # Lấy user_id từ kết quả query
+                    self.main_window = MainWindow(user_id, user_name)
                     self.main_window.show()
                 else:
                     QMessageBox.warning(self, "Lỗi", "Email hoặc mật khẩu không đúng.")

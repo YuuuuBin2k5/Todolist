@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import sys
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QFontDatabase, QFont
@@ -16,7 +17,7 @@ if __name__ == "__main__":
         print(f"LỖI: Không thể tải font từ đường dẫn: '{font_path}'. Sử dụng font hệ thống.")
         app.setStyleSheet(f"""
             QWidget {{
-                font-family: 'Times New Roman', serif;
+                font-family: 'Segoe UI', 'Arial', 'DejaVu Sans', sans-serif;
             }}
             QPushButton {{
                 cursor: pointer;
@@ -28,7 +29,7 @@ if __name__ == "__main__":
         print(f"Font '{font_family}' đã được tải thành công.")
         app.setStyleSheet(f"""
             QWidget {{
-                font-family: '{font_family}', serif;
+                font-family: '{font_family}', 'Segoe UI', 'Arial', 'DejaVu Sans', sans-serif;
             }}
             QPushButton {{
                 cursor: pointer;
