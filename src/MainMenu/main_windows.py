@@ -207,7 +207,7 @@ class MainWindow(QMainWindow):
         self.side_panel.group_area_requested.connect(self._handle_group_view)
         self.side_panel.home_requested.connect(self._handle_home_view)
         self.side_panel.calendar_requested.connect(self._handle_calendar_view)
-        self.side_panel.exit_requested.connect(self.close)
+        self.side_panel.exit_requested.connect(self._prompt_for_exit)
 
     def _handle_personal_view(self):
         """
