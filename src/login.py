@@ -167,10 +167,17 @@ class LoginRegisterApp(QMainWindow):
 
         # Thay vì connect trực tiếp, chúng ta sẽ trả về các widget để connect sau.
         # Điều này tránh được lỗi khi các widget chưa được tạo xong.
+         # Thêm sự kiện khi nhấn Enter sẽ tự động nhấn nút
         if "Sign In" in title:
             button.clicked.connect(self.handle_sign_in)
+            email_input.returnPressed.connect(button.click)
+            password_input.returnPressed.connect(button.click)
         else:
             button.clicked.connect(self.handle_sign_up)
+            if name_input:
+                name_input.returnPressed.connect(button.click)
+            email_input.returnPressed.connect(button.click)
+            password_input.returnPressed.connect(button.click)
             
         layout.addWidget(button, alignment=Qt.AlignCenter)
         
