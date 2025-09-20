@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QGridLayout, QApplication
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
-from components import DayWidget, TaskWidget 
+from MainMenu.components import DayWidget, TaskWidget 
 
 VIETNAMESE_MONTHS = [
     "Tháng Một", "Tháng Hai", "Tháng Ba", "Tháng Tư", "Tháng Năm", "Tháng Sáu",
