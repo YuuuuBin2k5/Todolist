@@ -104,3 +104,33 @@ class SidePanel(QFrame):
         
         # Đặt pixmap đã vẽ xong làm nội dung cho label avatar
         self.avatar.setPixmap(pixmap)
+    #Làm mờ nút
+    def update_view_buttons(self, active_view):
+        """
+            Cập nhật giao diện của các nút điều hướng để làm nổi bật khu vực đang hoạt động.
+            active_view: 'personal' hoặc 'group'
+        """
+        # Định nghĩa kiểu CSS cho trạng thái bình thường và trạng thái "mờ" (đang hoạt động)
+        normal_style = """
+            background-color: #ffffff; 
+            border: 1px solid #c0c0c0; 
+            border-radius: 15px; 
+            padding: 10px; 
+            font-weight: bold;
+        """
+        
+        active_style = """
+            background-color: #e0e0e0; /* Màu nền xám hơn */
+            color: #888888; /* Màu chữ xám hơn */
+            border: 1px solid #b0b0b0; 
+            border-radius: 15px; 
+            padding: 10px; 
+            font-weight: bold;
+        """
+        
+        if active_view == 'personal':
+            self.personal_btn.setStyleSheet(active_style)
+            self.group_btn.setStyleSheet(normal_style)
+        elif active_view == 'group':
+            self.personal_btn.setStyleSheet(normal_style)
+            self.group_btn.setStyleSheet(active_style)

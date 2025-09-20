@@ -144,9 +144,12 @@ class MainWindow(QMainWindow):
     def _handle_personal_view(self):
         print("Chuyển sang khu vực cá nhân...")
         self.side_panel.set_user_info(self.user_name, self.default_role)
+        # Làm mờ nút
+        self.side_panel.update_view_buttons('personal')
 
     def _handle_group_view(self):
         print("Chuyển sang khu vực nhóm...")
+        self.side_panel.update_view_buttons('group')
         group_role = "Thành viên" 
         try:
             conn = sqlite3.connect("todolist_database.db")
