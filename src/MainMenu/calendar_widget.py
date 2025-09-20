@@ -10,6 +10,8 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
 from MainMenu.components import DayWidget, TaskWidget 
 
+calendar.setfirstweekday(calendar.SUNDAY)
+
 VIETNAMESE_MONTHS = [
     "Tháng Một", "Tháng Hai", "Tháng Ba", "Tháng Tư", "Tháng Năm", "Tháng Sáu",
     "Tháng Bảy", "Tháng Tám", "Tháng Chín", "Tháng Mười", "Tháng Mười Một", "Tháng Mười Hai"
