@@ -11,6 +11,9 @@ class LoginRegisterApp(QMainWindow):
     def __init__(self):
         super().__init__()
         
+        # [THÊM MỚI] Thêm một cờ để kiểm soát việc đóng cửa sổ
+        self._allow_close = False
+
         self.setWindowTitle("Login/Register")
         
         self.setGeometry(100, 100, CONTAINER_WIDTH, CONTAINER_HEIGHT)
@@ -33,10 +36,7 @@ class LoginRegisterApp(QMainWindow):
         self.stacked_forms.setFixedSize(FORM_WIDTH, CONTAINER_HEIGHT)
         self.stacked_forms.setStyleSheet("background-color: transparent;")
         
-        # Tạo form đăng nhập và lưu trữ các QLineEdit để sử dụng sau này.
         self.sign_in_form, self.email_input_signin, self.password_input_signin = self.create_form("Sign In", "or use your email password")
-        
-        # Tạo form đăng ký và lưu trữ các QLineEdit riêng biệt.
         self.sign_up_form, self.name_input_signup, self.email_input_signup, self.password_input_signup = self.create_form("Create Account", "or use your email for registration")
         
         self.stacked_forms.addWidget(self.sign_in_form)
@@ -47,8 +47,6 @@ class LoginRegisterApp(QMainWindow):
         self.toggle_panel = QWidget()
         self.toggle_panel.setFixedSize(TOGGLE_PANEL_WIDTH, CONTAINER_HEIGHT)
         
-        # Đặt border-radius ban đầu cho panel khi nó ở bên phải (trạng thái Sign In).
-        # Đã cập nhật để bo tròn cả 4 góc.
         self.toggle_panel.setStyleSheet(f"""
             background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {COLOR_PRIMARY_BLUE}, stop:1 {COLOR_SECONDARY_BLUE});
             color: white;
@@ -84,25 +82,41 @@ class LoginRegisterApp(QMainWindow):
         self.animation_toggle = QPropertyAnimation(self.toggle_panel, b"pos")
         self.animation_toggle.setDuration(ANIMATION_DURATION_MS)
 
+    def closeEvent(self, event):
+        """
+        Ghi đè sự kiện đóng cửa sổ.
+        """
+        if not self._allow_close:
+            reply = QMessageBox.question(
+                self,
+                "Xác nhận Thoát",
+                "Bạn có chắc chắn muốn thoát không?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+            if reply == QMessageBox.Yes:
+                event.accept()
+            else:
+                event.ignore()
+        else:
+            event.accept()
+
     def create_form(self, title, subtitle):
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        # Thiết lập khoảng cách giữa các widget trong form
         layout.setSpacing(10)
         layout.setContentsMargins(30, 0, 30, 0)
         layout.setAlignment(Qt.AlignCenter)
         
         title_label = QLabel(f"<h1>{title}</h1>")
-        # Điều chỉnh kích thước và độ đậm của tiêu đề
         title_label.setStyleSheet("font-size: 24px; font-weight: 700; color: #333;")
         title_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(title_label)
         
         social_layout = QHBoxLayout()
-        # Căn giữa các icon mạng xã hội
         social_layout.setAlignment(Qt.AlignCenter)
         social_layout.setSpacing(10)
-        # Thêm các icon mạng xã hội 
         social_icons = ["./assets/images/google_icon.png", "./assets/images/facebook_icon.png", "./assets/images/instagram_icon.png", "./assets/images/github_icon.png"]
         for icon_path in social_icons:
             icon_label = QLabel()
@@ -121,12 +135,10 @@ class LoginRegisterApp(QMainWindow):
         layout.addLayout(social_layout)
         
         subtitle_label = QLabel(f"<p>{subtitle}</p>")
-        # Điều chỉnh kích thước chữ của phụ đề
         subtitle_label.setStyleSheet("font-size: 14px; color: #555;")
         subtitle_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(subtitle_label)
         
-        # Khai báo các biến cục bộ trong hàm để tránh bị ghi đè.
         email_input = QLineEdit(placeholderText="Email")
         email_input.setStyleSheet("padding: 10px; height: 40px; border: none; background-color: #f3f3f3; border-radius: 8px;")
         layout.addWidget(email_input)
@@ -165,9 +177,6 @@ class LoginRegisterApp(QMainWindow):
             border-radius: 8px;
         """)
 
-        # Thay vì connect trực tiếp, chúng ta sẽ trả về các widget để connect sau.
-        # Điều này tránh được lỗi khi các widget chưa được tạo xong.
-         # Thêm sự kiện khi nhấn Enter sẽ tự động nhấn nút
         if "Sign In" in title:
             button.clicked.connect(self.handle_sign_in)
             email_input.returnPressed.connect(button.click)
@@ -181,7 +190,6 @@ class LoginRegisterApp(QMainWindow):
             
         layout.addWidget(button, alignment=Qt.AlignCenter)
         
-        # Trả về các widget để có thể truy cập từ bên ngoài.
         if "Create" in title:
             return widget, name_input, email_input, password_input
         else:
@@ -215,7 +223,6 @@ class LoginRegisterApp(QMainWindow):
         self.stacked_forms.setCurrentWidget(self.sign_up_form)
         self.toggle_layout.setCurrentWidget(self.toggle_left)
         
-        # Đã cập nhật để bo tròn cả 4 góc khi panel di chuyển sang trái
         self.toggle_panel.setStyleSheet(f"""
             background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {COLOR_PRIMARY_BLUE_PURPLE}, stop:1 {COLOR_SECONDARY_BLUE_PURPLE});
             color: white;
@@ -231,7 +238,6 @@ class LoginRegisterApp(QMainWindow):
         self.stacked_forms.setCurrentWidget(self.sign_in_form)
         self.toggle_layout.setCurrentWidget(self.toggle_right)
         
-        # Đã cập nhật để bo tròn cả 4 góc khi panel quay về bên phải
         self.toggle_panel.setStyleSheet(f"""
             background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {COLOR_PRIMARY_BLUE}, stop:1 {COLOR_SECONDARY_BLUE});
             color: white;
@@ -246,21 +252,16 @@ class LoginRegisterApp(QMainWindow):
     def handle_sign_in(self):
         email = self.email_input_signin.text()
         password = self.password_input_signin.text()
-        print(email)
-        print(password)
         
         try:
-            # Thay thế 'todolist_database.db' bằng đường dẫn tới CSDL của bạn
             with sqlite3.connect('todolist_database.db') as conn:
                 cursor = conn.cursor()
-                # Kiểm tra thông tin đăng nhập với tên cột chính xác.
                 cursor.execute( "SELECT * FROM users WHERE email = ? AND user_password = ?", (email, password))
                 user = cursor.fetchone()
                 
                 if user:
-                    # Đóng cửa sổ đăng nhập hiện tại
+                    self._allow_close = True
                     self.close()
-                    # Tạo và hiển thị cửa sổ chính
                     self.main_window = MainWindow(user)
                     self.main_window.show()
                 else:
@@ -278,10 +279,8 @@ class LoginRegisterApp(QMainWindow):
             return
 
         try:
-            # Thay thế 'todolist_database.db' bằng đường dẫn tới CSDL của bạn
             with sqlite3.connect('todolist_database.db') as conn:
                 cursor = conn.cursor()
-                # Thêm dữ liệu vào bảng với tên cột chính xác.
                 cursor.execute("INSERT INTO users (user_name, email, user_password) VALUES (?, ?, ?)", (name, email, password))
                 conn.commit()
                 QMessageBox.information(self, "Thành công", "Đăng ký thành công! Vui lòng đăng nhập.")
@@ -306,4 +305,3 @@ class LoginRegisterApp(QMainWindow):
         
         self.animation_form.start()
         self.animation_toggle.start()
-
