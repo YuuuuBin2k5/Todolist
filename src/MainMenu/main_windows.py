@@ -127,6 +127,48 @@ class MainWindow(QMainWindow):
         self.side_panel.update_view_buttons('personal', 'home')
         self.home_widget.load_data()
 
+    def closeEvent(self, event):
+        """
+        Hiển thị hộp thoại xác nhận khi người dùng cố gắng đóng cửa sổ chính bằng nút X.
+        """
+        # [THAY ĐỔI] Chỉ hiển thị hộp thoại nếu không phải đang đăng xuất
+        if self._is_logging_out:
+            event.accept()
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Xác nhận Thoát",
+            "Bạn có chắc chắn muốn thoát khỏi ứng dụng chứ?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            event.accept()
+        else:
+            event.ignore()
+
+    def _prompt_for_exit(self):
+        """
+        Hàm này giờ chỉ xử lý việc đăng xuất (Sign Out).
+        """
+        reply = QMessageBox.question(
+            self,
+            "Xác nhận Đăng xuất",
+            "Bạn có chắc chắn muốn đăng xuất không?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            from login import LoginRegisterApp
+            # [THAY ĐỔI] Đặt cờ thành True trước khi đóng
+            self._is_logging_out = True
+            self.close()
+            self.login_window = LoginRegisterApp()
+            self.login_window.show()
+
     def initUI(self):
         """
             Thiết lập giao diện người dùng cho cửa sổ chính.
