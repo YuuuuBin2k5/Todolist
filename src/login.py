@@ -33,8 +33,11 @@ class LoginRegisterApp(QMainWindow):
         self.stacked_forms.setFixedSize(FORM_WIDTH, CONTAINER_HEIGHT)
         self.stacked_forms.setStyleSheet("background-color: transparent;")
         
-        self.sign_in_form = self.create_form("Sign In", "or use your email password")
-        self.sign_up_form = self.create_form("Create Account", "or use your email for registration")
+        # Tạo form đăng nhập và lưu trữ các QLineEdit để sử dụng sau này.
+        self.sign_in_form, self.email_input_signin, self.password_input_signin = self.create_form("Sign In", "or use your email password")
+        
+        # Tạo form đăng ký và lưu trữ các QLineEdit riêng biệt.
+        self.sign_up_form, self.name_input_signup, self.email_input_signup, self.password_input_signup = self.create_form("Create Account", "or use your email for registration")
         
         self.stacked_forms.addWidget(self.sign_in_form)
         self.stacked_forms.addWidget(self.sign_up_form)
@@ -123,26 +126,28 @@ class LoginRegisterApp(QMainWindow):
         subtitle_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(subtitle_label)
         
-        # Căn chỉnh kích thước và style cho các ô nhập liệu
-        # Use instance variables to access inputs later
-        self.email_input = QLineEdit(placeholderText="Email")
-        self.email_input.setStyleSheet("padding: 10px; height: 40px; border: none; background-color: #f3f3f3; border-radius: 8px;")
-        layout.addWidget(self.email_input)
+        # Khai báo các biến cục bộ trong hàm để tránh bị ghi đè.
+        email_input = QLineEdit(placeholderText="Email")
+        email_input.setStyleSheet("padding: 10px; height: 40px; border: none; background-color: #f3f3f3; border-radius: 8px;")
+        layout.addWidget(email_input)
 
+        name_input = None
+        password_input = None
+        
         if "Create" in title:
-            self.name_input = QLineEdit(placeholderText="Name")
-            self.name_input.setStyleSheet("padding: 10px; height: 40px; border: none; background-color: #f3f3f3; border-radius: 8px;")
-            layout.addWidget(self.name_input)
+            name_input = QLineEdit(placeholderText="Name")
+            name_input.setStyleSheet("padding: 10px; height: 40px; border: none; background-color: #f3f3f3; border-radius: 8px;")
+            layout.addWidget(name_input)
             
-            self.password_input_signup = QLineEdit(placeholderText="Password")
-            self.password_input_signup.setStyleSheet("padding: 10px; height: 40px; border: none; background-color: #f3f3f3; border-radius: 8px;")
-            self.password_input_signup.setEchoMode(QLineEdit.Password)
-            layout.addWidget(self.password_input_signup)
+            password_input = QLineEdit(placeholderText="Password")
+            password_input.setStyleSheet("padding: 10px; height: 40px; border: none; background-color: #f3f3f3; border-radius: 8px;")
+            password_input.setEchoMode(QLineEdit.Password)
+            layout.addWidget(password_input)
         else:
-            self.password_input_signin = QLineEdit(placeholderText="Password")
-            self.password_input_signin.setStyleSheet("padding: 10px; height: 40px; border: none; background-color: #f3f3f3; border-radius: 8px;")
-            self.password_input_signin.setEchoMode(QLineEdit.Password)
-            layout.addWidget(self.password_input_signin)
+            password_input = QLineEdit(placeholderText="Password")
+            password_input.setStyleSheet("padding: 10px; height: 40px; border: none; background-color: #f3f3f3; border-radius: 8px;")
+            password_input.setEchoMode(QLineEdit.Password)
+            layout.addWidget(password_input)
         
         if "Sign In" in title:
             forgot_password_label = QLabel("<a href='#'>Forgot Your Password?</a>")
@@ -160,6 +165,8 @@ class LoginRegisterApp(QMainWindow):
             border-radius: 8px;
         """)
 
+        # Thay vì connect trực tiếp, chúng ta sẽ trả về các widget để connect sau.
+        # Điều này tránh được lỗi khi các widget chưa được tạo xong.
         if "Sign In" in title:
             button.clicked.connect(self.handle_sign_in)
         else:
@@ -167,7 +174,11 @@ class LoginRegisterApp(QMainWindow):
             
         layout.addWidget(button, alignment=Qt.AlignCenter)
         
-        return widget
+        # Trả về các widget để có thể truy cập từ bên ngoài.
+        if "Create" in title:
+            return widget, name_input, email_input, password_input
+        else:
+            return widget, email_input, password_input
 
     def create_toggle_panel(self, title, subtitle, button_text):
         widget = QWidget()
@@ -226,14 +237,17 @@ class LoginRegisterApp(QMainWindow):
         self.animate_transition(is_sign_up=False)
 
     def handle_sign_in(self):
-        email = self.email_input.text()
+        email = self.email_input_signin.text()
         password = self.password_input_signin.text()
+        print(email)
+        print(password)
         
         try:
             # Thay thế 'your_database.db' bằng đường dẫn tới CSDL của bạn
-            with sqlite3.connect('your_database.db') as conn:
+            with sqlite3.connect('todolist_database.db') as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT * FROM users WHERE email = ? AND password = ?", (email, password))
+                # Kiểm tra thông tin đăng nhập với tên cột chính xác.
+                cursor.execute("SELECT * FROM users WHERE email = ? AND user_password = ?", (email, password))
                 user = cursor.fetchone()
                 
                 if user:
@@ -242,15 +256,14 @@ class LoginRegisterApp(QMainWindow):
                     # Tạo và hiển thị cửa sổ chính
                     self.main_window = MainWindow()
                     self.main_window.show()
-
                 else:
                     QMessageBox.warning(self, "Lỗi", "Email hoặc mật khẩu không đúng.")
         except sqlite3.Error as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Lỗi khi kết nối hoặc truy vấn CSDL: {e}")
 
     def handle_sign_up(self):
-        name = self.name_input.text()
-        email = self.email_input.text()
+        name = self.name_input_signup.text()
+        email = self.email_input_signup.text()
         password = self.password_input_signup.text()
         
         if not name or not email or not password:
@@ -261,6 +274,7 @@ class LoginRegisterApp(QMainWindow):
             # Thay thế 'your_database.db' bằng đường dẫn tới CSDL của bạn
             with sqlite3.connect('todolist_database.db') as conn:
                 cursor = conn.cursor()
+                # Thêm dữ liệu vào bảng với tên cột chính xác.
                 cursor.execute("INSERT INTO users (name, email, password) VALUES (?, ?, ?)", (name, email, password))
                 conn.commit()
                 QMessageBox.information(self, "Thành công", "Đăng ký thành công! Vui lòng đăng nhập.")
