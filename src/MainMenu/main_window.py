@@ -276,7 +276,8 @@ class MainWindow(QMainWindow):
         
         # Cập nhật dữ liệu cho trang hiện tại
         if self.current_content == 'home':
-            self.home_widget.switch_context(user_id=self.user_id)
+            self.home_widget.user_id = self.user_id
+            self.home_widget.load_data()
         elif self.current_content == 'calendar':
             self.load_personal_tasks()
 
@@ -293,7 +294,8 @@ class MainWindow(QMainWindow):
             
             # Sau khi chọn nhóm, load dữ liệu tùy thuộc vào trang đang hiển thị
             if self.current_content == 'home':
-                self.home_widget.switch_context(group_id=group_id)
+                self.home_widget.user_id = self.user_id
+                self.home_widget.load_data()
             elif self.current_content == 'calendar':
                 self.load_group_tasks(group_id)
         else: # Nếu người dùng hủy hoặc không chọn nhóm, quay lại view cũ
@@ -311,11 +313,9 @@ class MainWindow(QMainWindow):
         is_leader = self.is_leader_of_current_group if self.current_view == 'group' else False
         self.side_panel.update_view(self.current_view, is_leader)
         
-        # Cập nhật dữ liệu cho trang chủ dựa trên ngữ cảnh hiện tại
-        if self.current_view == 'personal':
-            self.home_widget.switch_context(user_id=self.user_id)
-        elif self.current_view == 'group' and self.current_group_id:
-            self.home_widget.switch_context(group_id=self.current_group_id)
+        # Cập nhật dữ liệu cho trang chủ
+        self.home_widget.user_id = self.user_id
+        self.home_widget.load_data()
 
     def _handle_calendar_view(self):
         """
