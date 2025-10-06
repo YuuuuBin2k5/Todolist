@@ -104,7 +104,6 @@ class MainWindow(QMainWindow):
         self.default_role = "Quản trị viên"
 
         self.login_window = None
-        # [THÊM MỚI] Thêm cờ để kiểm soát việc đăng xuất
         self._is_logging_out = False
 
         self.setWindowTitle("Dashboard - Calendar")
@@ -119,7 +118,6 @@ class MainWindow(QMainWindow):
         """
         Hiển thị hộp thoại xác nhận khi người dùng cố gắng đóng cửa sổ chính bằng nút X.
         """
-        # [THAY ĐỔI] Chỉ hiển thị hộp thoại nếu không phải đang đăng xuất
         if self._is_logging_out:
             event.accept()
             return
@@ -151,7 +149,6 @@ class MainWindow(QMainWindow):
 
         if reply == QMessageBox.Yes:
             from login import LoginRegisterApp
-            # [THAY ĐỔI] Đặt cờ thành True trước khi đóng
             self._is_logging_out = True
             self.close()
             self.login_window = LoginRegisterApp()
@@ -168,7 +165,8 @@ class MainWindow(QMainWindow):
         self.side_panel = SidePanel()
         main_layout.addWidget(self.side_panel)
         
-        self.calendar = CalendarWidget()
+        # [THAY ĐỔI] Truyền user_id vào CalendarWidget khi khởi tạo
+        self.calendar = CalendarWidget(user_id=self.user_id)
         main_layout.addWidget(self.calendar, 1)
 
         self.side_panel.personal_area_requested.connect(self._handle_personal_view)
@@ -180,6 +178,9 @@ class MainWindow(QMainWindow):
         print("Chuyển sang khu vực cá nhân...")
         self.side_panel.set_user_info(self.user_name, self.default_role)
         self.side_panel.update_view_buttons('personal')
+        # [THÊM MỚI] Yêu cầu lịch tải lại dữ liệu cho chế độ cá nhân
+        self.calendar.switch_view_mode(view_mode='personal', user_id=self.user_id)
+
 
     def _handle_group_view(self):
         print("Chuyển sang khu vực nhóm...")
@@ -189,25 +190,27 @@ class MainWindow(QMainWindow):
             conn = sqlite3.connect("todolist_database.db")
             cursor = conn.cursor()
             
-            cursor.execute("SELECT group_id FROM group_members WHERE user_id = ? LIMIT 1", (self.user_id,))
-            group_result = cursor.fetchone()
-            
-            if group_result:
-                group_id = group_result[0]
-                
-                cursor.execute("SELECT leader_id FROM groups WHERE group_id = ?", (group_id,))
-                leader_result = cursor.fetchone()
-
-                if leader_result:
-                    leader_id = leader_result[0]
-                    if self.user_id == leader_id:
-                        group_role = "Quản trị viên"
-                
-                self.side_panel.set_user_info(self.user_name, group_role)
-            else:
-                self.side_panel.set_user_info(self.user_name, "Chưa tham gia nhóm")
-                QMessageBox.information(self, "Thông báo", "Bạn chưa tham gia nhóm nào.")
+            # [THAY ĐỔI] Lấy tất cả các nhóm người dùng là thành viên
+            cursor.execute("SELECT g.group_id, g.group_name, g.leader_id FROM group_members gm JOIN groups g ON gm.group_id = g.group_id WHERE gm.user_id = ?", (self.user_id,))
+            user_groups = cursor.fetchall()
             
             conn.close()
+            
+            if user_groups:
+                # Hiện tại, mã nguồn chỉ xử lý 1 nhóm đầu tiên tìm thấy
+                group_id, group_name, leader_id = user_groups[0]
+                
+                if self.user_id == leader_id:
+                    group_role = "Quản trị viên"
+                
+                self.side_panel.set_user_info(self.user_name, group_role)
+                # [THÊM MỚI] Yêu cầu lịch tải lại dữ liệu cho chế độ nhóm
+                self.calendar.switch_view_mode(view_mode='group', user_id=self.user_id, group_id=group_id)
+            else:
+                self.side_panel.set_user_info(self.user_name, "Chưa tham gia nhóm")
+                # [THÊM MỚI] Xóa các công việc trên lịch nếu người dùng không thuộc nhóm nào
+                self.calendar.switch_view_mode(view_mode='group', user_id=self.user_id, group_id=None)
+                QMessageBox.information(self, "Thông báo", "Bạn chưa tham gia nhóm nào.")
+            
         except sqlite3.Error as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Không thể truy vấn vai trò nhóm: {e}")
