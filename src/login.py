@@ -13,6 +13,7 @@ from PyQt5.QtCore import Qt, QPropertyAnimation, QPoint
 from PyQt5.QtGui import QPixmap, QFont 
 from config import *
 from MainMenu.main_window import MainWindow
+from Managers.database_manager import Database
 
 # ==========================================================================================
 # LỚP DIALOG MỚI CHO CHỨC NĂNG QUÊN MẬT KHẨU
@@ -117,16 +118,17 @@ class ForgotPasswordDialog(QDialog):
         if not self.email:
             QMessageBox.warning(self, "Lỗi", "Vui lòng nhập email.")
             return
-
-        # Kiểm tra email có tồn tại trong CSDL không
-        conn = sqlite3.connect('todolist_database.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE email = ?", (self.email,))
-        if not cursor.fetchone():
-            QMessageBox.warning(self, "Lỗi", "Email không tồn tại trong hệ thống.")
-            conn.close()
+        # Kiểm tra email có tồn tại trong CSDL không (dùng Database helper)
+        try:
+            db_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Data', 'todolist_database.db'))
+            db = Database(db_path)
+            user = db.get_user_by_email(self.email)
+            if not user:
+                QMessageBox.warning(self, "Lỗi", "Email không tồn tại trong hệ thống.")
+                return
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi CSDL", f"Không thể kiểm tra email: {e}")
             return
-        conn.close()
 
         # Tạo mã và gửi email
         self.verification_code = str(random.randint(100000, 999999))
@@ -157,15 +159,12 @@ class ForgotPasswordDialog(QDialog):
             
         # Cập nhật mật khẩu trong CSDL
         try:
-            conn = sqlite3.connect('todolist_database.db')
-            cursor = conn.cursor()
-            cursor.execute("UPDATE users SET user_password = ? WHERE email = ?", (new_password, self.email))
-            conn.commit()
-            conn.close()
-            
+            db_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Data', 'todolist_database.db'))
+            db = Database(db_path)
+            db._execute_query("UPDATE users SET user_password = ? WHERE email = ?", (new_password, self.email), commit=True)
             QMessageBox.information(self, "Thành công", "Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập.")
             self.accept() # Đóng dialog
-        except sqlite3.Error as e:
+        except Exception as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Không thể cập nhật mật khẩu: {e}")
 
     # ======================================================================================
@@ -277,7 +276,7 @@ class LoginRegisterApp(QMainWindow):
         social_layout = QHBoxLayout()
         social_layout.setAlignment(Qt.AlignCenter)
         social_layout.setSpacing(10)
-        social_icons = ["./assets/images/google_icon.png", "./assets/images/facebook_icon.png", "./assets/images/instagram_icon.png", "./assets/images/github_icon.png"]
+        social_icons = ["assets/images/google_icon.png", "assets/images/facebook_icon.png", "assets/images/instagram_icon.png", "assets/images/github_icon.png"]
         for icon_path in social_icons:
             icon_label = QLabel()
             icon_pixmap = QPixmap(icon_path)
@@ -370,25 +369,19 @@ class LoginRegisterApp(QMainWindow):
         password = self.password_input_signin.text()
         
         try:
-            # Thay thế 'todolist_database.db' bằng đường dẫn tới CSDL của bạn
-            db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Data/todolist_database.db')
-            db_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Data/todolist_database.db'))
-            with sqlite3.connect(db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute( "SELECT * FROM users WHERE email = ? AND user_password = ?", (email, password))
-                user = cursor.fetchone()
-                user_name = user[1] if user else None
-                
-                if user:
-                    self._allow_close = True
-                    self.close()
-                    # Tạo và hiển thị cửa sổ chính với user_id (index 0 của tuple)
-                    user_id = user[0]  # Lấy user_id từ kết quả query
-                    self.main_window = MainWindow(user_id, user_name)
-                    self.main_window.show()
-                else:
-                    QMessageBox.warning(self, "Lỗi", "Email hoặc mật khẩu không đúng.")
-        except sqlite3.Error as e:
+            # Use Database helper for authentication
+            db_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Data', 'todolist_database.db'))
+            db = Database(db_path)
+            user = db._execute_query("SELECT user_id, user_name FROM users WHERE email = ? AND user_password = ?", (email, password), fetchone=True)
+            if user:
+                user_id, user_name = user[0], user[1]
+                self._allow_close = True
+                self.close()
+                self.main_window = MainWindow(user_id, user_name)
+                self.main_window.show()
+            else:
+                QMessageBox.warning(self, "Lỗi", "Email hoặc mật khẩu không đúng.")
+        except Exception as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Lỗi khi kết nối hoặc truy vấn CSDL: {e}")
 
     def handle_sign_up(self):
@@ -399,19 +392,15 @@ class LoginRegisterApp(QMainWindow):
             QMessageBox.warning(self, "Lỗi", "Vui lòng điền đầy đủ tất cả các trường.")
             return
         try:
-            # Thay thế 'todolist_database.db' bằng đường dẫn tới CSDL của bạn
-            
-            db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Data/todolist_database.db')
-            db_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Data/todolist_database.db'))
-            with sqlite3.connect(db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO users (user_name, email, user_password) VALUES (?, ?, ?)", (name, email, password))
-                conn.commit()
+            db_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Data', 'todolist_database.db'))
+            db = Database(db_path)
+            created = db.create_user(name, password, email)
+            if created:
                 QMessageBox.information(self, "Thành công", "Đăng ký thành công! Vui lòng đăng nhập.")
                 self.show_sign_in()
-        except sqlite3.IntegrityError:
-            QMessageBox.warning(self, "Lỗi", "Email này đã tồn tại.")
-        except sqlite3.Error as e:
+            else:
+                QMessageBox.warning(self, "Lỗi", "Email này đã tồn tại hoặc không thể tạo tài khoản.")
+        except Exception as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Lỗi khi kết nối hoặc truy vấn CSDL: {e}")
 
     def animate_transition(self, is_sign_up):

@@ -1,5 +1,5 @@
-import sqlite3
 import os
+from Managers.database_manager import Database
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem, 
                              QPushButton, QInputDialog, QMessageBox, QLabel, QLineEdit)
 from PyQt5.QtCore import Qt
@@ -43,22 +43,15 @@ class GroupSelectionDialog(QDialog):
         """Tải danh sách các nhóm mà người dùng là thành viên."""
         self.group_list_widget.clear()
         try:
-            conn = sqlite3.connect(_get_database_path())
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT g.group_id, g.group_name 
-                FROM groups g
-                JOIN group_members gm ON g.group_id = gm.group_id
-                WHERE gm.user_id = ?
-            """, (self.user_id,))
-            groups = cursor.fetchall()
-            conn.close()
+            db_path = _get_database_path()
+            db = Database(db_path)
+            groups = db.get_groups_for_user(self.user_id)
             
             for group_id, group_name in groups:
                 item = QListWidgetItem(group_name)
                 item.setData(Qt.UserRole, group_id) # Lưu group_id vào item
                 self.group_list_widget.addItem(item)
-        except sqlite3.Error as e:
+        except Exception as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Không thể tải danh sách nhóm: {e}")
 
     def create_new_group(self):
@@ -66,22 +59,17 @@ class GroupSelectionDialog(QDialog):
         group_name, ok = QInputDialog.getText(self, "Tạo Nhóm Mới", "Nhập tên nhóm:")
         if ok and group_name:
             try:
-                conn = sqlite3.connect(_get_database_path())
-                cursor = conn.cursor()
-                # Thêm nhóm mới với user hiện tại là leader
-                cursor.execute("INSERT INTO groups (group_name, leader_id) VALUES (?, ?)", (group_name, self.user_id))
-                group_id = cursor.lastrowid # Lấy id của nhóm vừa tạo
-                
-                # Tự động thêm leader vào bảng group_members
-                cursor.execute("INSERT INTO group_members (user_id, group_id) VALUES (?, ?)",
-                               (self.user_id, group_id, "Leader"))
-                conn.commit()
-                conn.close()
-                QMessageBox.information(self, "Thành công", f"Đã tạo nhóm '{group_name}' thành công.")
-                self.load_groups() # Tải lại danh sách
-            except sqlite3.IntegrityError:
-                 QMessageBox.warning(self, "Lỗi", "Tên nhóm này đã tồn tại.")
-            except sqlite3.Error as e:
+                db_path = _get_database_path()
+                db = Database(db_path)
+                gid = db.create_group(group_name, self.user_id)
+                if gid:
+                    # ensure leader is in group_members
+                    db.add_group_member(gid, self.user_id)
+                    QMessageBox.information(self, "Thành công", f"Đã tạo nhóm '{group_name}' thành công.")
+                    self.load_groups()
+                else:
+                    QMessageBox.warning(self, "Lỗi", "Không thể tạo nhóm (có thể tên trùng).")
+            except Exception as e:
                  QMessageBox.critical(self, "Lỗi CSDL", f"Không thể tạo nhóm: {e}")
 
     def accept_selection(self):
@@ -107,20 +95,11 @@ class MemberListDialog(QDialog):
         layout.addWidget(self.member_list)
 
         try:
-            conn = sqlite3.connect(_get_database_path())
-            cursor = conn.cursor()
-            # Lấy tên, email của các thành viên
-            cursor.execute("""
-                SELECT u.user_name, u.email
-                FROM users u
-                JOIN group_members gm ON u.user_id = gm.user_id
-                WHERE gm.group_id = ?
-            """, (group_id,))
-            members = cursor.fetchall()
-            conn.close()
-            for name, email in members:
+            db = Database(_get_database_path())
+            members = db.get_group_members(group_id)
+            for uid, name, email in members:
                 self.member_list.addItem(f"{name} ({email})")
-        except sqlite3.Error as e:
+        except Exception as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Không thể tải danh sách thành viên: {e}")
 
 class AddMemberDialog(QDialog):
@@ -143,31 +122,23 @@ class AddMemberDialog(QDialog):
         email = self.email_input.text().strip()
         if not email:
             QMessageBox.warning(self, "Thiếu thông tin", "Vui lòng nhập email.")
-            return
+            return 
 
         try:
-            conn = sqlite3.connect(_get_database_path())
-            cursor = conn.cursor()
-            
-            # Tìm user_id từ email
-            cursor.execute("SELECT user_id, user_name FROM users WHERE email = ?", (email,))
-            user_result = cursor.fetchone()
-            
+            db = Database(_get_database_path())
+            user_result = db.get_user_by_email(email)
             if not user_result:
                 QMessageBox.warning(self, "Không tìm thấy", f"Không tìm thấy người dùng với email '{email}'.")
-                conn.close()
                 return
-
             user_id_to_add = user_result[0]
-            
-            # Thêm user vào bảng group_members với vai trò Member
-            cursor.execute("INSERT INTO group_members (user_id, group_id) VALUES (?, ?)",
-                           (user_id_to_add, self.group_id))
-            conn.commit()
-            conn.close()
-            QMessageBox.information(self, "Thành công", "Đã thêm thành viên mới vào nhóm.")
-            self.accept() # Đóng dialog
-        except sqlite3.IntegrityError:
-            QMessageBox.warning(self, "Lỗi", "Người dùng này đã ở trong nhóm.")
-        except sqlite3.Error as e:
-            QMessageBox.critical(self, "Lỗi CSDL", f"Không thể thêm thành viên: {e}")
+            try:
+                db.add_group_member(self.group_id, user_id_to_add)
+                QMessageBox.information(self, "Thành công", "Đã thêm thành viên mới vào nhóm.")
+                self.accept()
+            except Exception as e:
+                QMessageBox.warning(self, "Lỗi", f"Không thể thêm thành viên: {e}")
+            except Exception as e:
+                # Integrity or other DB errors
+                QMessageBox.warning(self, "Lỗi", f"Không thể thêm thành viên: {e}")
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi CSDL", f"Không thể truy xuất dữ liệu: {e}")
