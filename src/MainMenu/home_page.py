@@ -96,6 +96,12 @@ class TaskItemWidget(QFrame):
             title_font_style = f"font-size: 15px; text-decoration: line-through; color: {COLOR_TEXT_SECONDARY};"
         title_label.setStyleSheet(title_font_style)
         content_layout.addWidget(title_label)
+        # Show note if present
+        note_text = self.task_data.get('note', '')
+        if note_text:
+            note_label = QLabel(note_text)
+            note_label.setStyleSheet(f"font-size:12px; color: {COLOR_TEXT_SECONDARY}; padding-top:4px;")
+            content_layout.addWidget(note_label)
         
         details_text = []
         # [SỬA] Thêm hiển thị Priority
@@ -222,6 +228,8 @@ class DoNowView(QWidget):
         self.due_date_input = QDateTimeEdit(calendarPopup=True)
         self.due_date_input.setDateTime(QDateTime.currentDateTime())
         self.estimated_input = QLineEdit(placeholderText="Time in minutes")
+        # [THÊM] Ghi chú cho task
+        self.note_input = QLineEdit(placeholderText="Optional note")
         
         # [THÊM] Nút chọn Priority
         self.priority_button = QPushButton()
@@ -237,6 +245,7 @@ class DoNowView(QWidget):
         layout.addWidget(self.estimated_input, 1, 1)
         layout.addWidget(self.priority_button, 1, 2) # Thêm nút priority vào layout
         layout.addWidget(add_btn, 0, 2, 1, 1) # Chỉ chiếm 1 hàng
+        layout.addWidget(self.note_input, 2, 0, 1, 3)
 
         add_btn.clicked.connect(self._handle_add_task)
         self.title_input.returnPressed.connect(self._handle_add_task)
@@ -430,11 +439,13 @@ class DoNowView(QWidget):
         due_at = py_dt.strftime('%Y-%m-%d %H:%M:%S')
         estimated = self.estimated_input.text().strip()
         est_mins = int(estimated) if estimated.isdigit() else None
+        note = self.note_input.text().strip()
         try:
             # Use Database helper to add task with metadata (explicit call)
-            self.db.add_task_with_meta(self.user_id, title, note="", is_done=0, due_at=due_at, estimated_minutes=est_mins, priority=self.current_priority)
+            self.db.add_task_with_meta(self.user_id, title, note=note, is_done=0, due_at=due_at, estimated_minutes=est_mins, priority=self.current_priority)
             # Reload tasks to get consistent state (including new id)
             self.title_input.clear(); self.estimated_input.clear()
+            self.note_input.clear()
             self._set_priority(4)
             self.load_data_from_db()
         except Exception as e:

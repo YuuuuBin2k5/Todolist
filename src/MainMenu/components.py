@@ -4,9 +4,10 @@ import locale
 from datetime import datetime
 from PyQt5.QtWidgets import (QDialog, QFrame, QHBoxLayout, QCheckBox, QLabel, QVBoxLayout,
                              QApplication, QMenu, QInputDialog, QStyle, QPushButton,
-                             QScrollArea, QWidget, QLineEdit, QDateTimeEdit, QTextEdit, QDialogButtonBox, QMessageBox)
-from PyQt5.QtCore import Qt, QMimeData, QDate, QDateTime
-from PyQt5.QtGui import QDrag, QCursor, QFont
+                             QScrollArea, QWidget, QLineEdit, QDateTimeEdit, QTextEdit, QDialogButtonBox, QMessageBox,
+                             QGraphicsDropShadowEffect, QGraphicsOpacityEffect)
+from PyQt5.QtCore import Qt, QMimeData, QDate, QDateTime, QPropertyAnimation, QEasingCurve
+from PyQt5.QtGui import QDrag, QCursor, QFont, QColor, QFontMetrics
 
 # Thiết lập ngôn ngữ Tiếng Việt để hiển thị đúng Thứ trong tuần
 try:
@@ -40,17 +41,31 @@ class TaskDetailItemWidget(QFrame):
         task_id = task_data.get('task_id')
         is_group = task_data.get('is_group', False)
 
-        layout = QVBoxLayout(self)
+        # styling for a clean card-like look
+        self.setStyleSheet("""
+            QFrame#TaskDetailItem { background: #ffffff; border: 1px solid #e6eef3; border-radius: 10px; padding: 10px; }
+            QLabel#StatusSmall { font-size: 12px; color: #666; }
+            QLabel#NoteLabelInDialog { color: #444; }
+        """)
 
-        name_label = QLabel(title)
-        name_label.setFont(QFont("Arial", 11, QFont.Bold))
-        name_label.setWordWrap(True)
-        layout.addWidget(name_label)
-        # top info row: status, assignee, due
+        # Outer horizontal layout: content on left, checkbox column on right
+        outer_layout = QHBoxLayout(self)
+        outer_layout.setContentsMargins(8, 8, 8, 8)
+
+        # Left content (title, info, note, actions)
+        content_layout = QVBoxLayout()
+        content_layout.setSpacing(6)
+
+        title_lbl = QLabel(title)
+        title_lbl.setFont(QFont("Arial", 11, QFont.Bold))
+        title_lbl.setWordWrap(True)
+        content_layout.addWidget(title_lbl)
+
+        # top info row: assignee, due and small status label
         info_row = QHBoxLayout()
-        status_text = "✅ Đã hoàn thành" if is_done else "❌ Chưa hoàn thành"
-        status_label = QLabel(status_text)
+        status_label = QLabel("Đã hoàn thành" if is_done else "Chưa hoàn thành")
         status_label.setObjectName('StatusSmall')
+        status_label.setStyleSheet('color:#666;')
         info_row.addWidget(status_label)
         if assignee:
             assignee_label = QLabel(f"👤 {assignee}")
@@ -61,39 +76,29 @@ class TaskDetailItemWidget(QFrame):
             due_label.setStyleSheet('color:#666; margin-left:8px;')
             info_row.addWidget(due_label)
         info_row.addStretch()
-        layout.addLayout(info_row)
+        content_layout.addLayout(info_row)
 
         if note_text:
             note_label = QLabel(f"<b>Ghi chú:</b> {note_text}")
             note_label.setWordWrap(True)
             note_label.setObjectName("NoteLabelInDialog")
-            layout.addWidget(note_label)
+            content_layout.addWidget(note_label)
 
-        # actions for leader/owner
+        # actions row (delete only)
         actions_row = QHBoxLayout()
         actions_row.addStretch()
-        # toggle button
-        toggle_btn = QPushButton("Đổi trạng thái")
         delete_btn = QPushButton("Xóa")
-        def do_toggle():
-            try:
-                if self.calendar_ref and task_id is not None:
-                    # flip
-                    new_state = 0 if is_done else 1
-                    self.calendar_ref.update_task_status(task_id, new_state, is_group=is_group)
-            except Exception:
-                pass
         def do_delete():
             try:
                 if self.calendar_ref and task_id is not None:
                     self.calendar_ref.delete_task(task_id, is_group=is_group)
             except Exception:
                 pass
-        toggle_btn.clicked.connect(do_toggle)
         delete_btn.clicked.connect(do_delete)
-        actions_row.addWidget(toggle_btn)
         actions_row.addWidget(delete_btn)
-        layout.addLayout(actions_row)
+        content_layout.addLayout(actions_row)
+
+        outer_layout.addLayout(content_layout)
 
 # ==============================================================================
 # LỚP BỊ THIẾU SỐ 2: DayDetailDialog
@@ -135,6 +140,43 @@ class DayDetailDialog(QDialog):
         close_button = QPushButton("Đóng")
         close_button.clicked.connect(self.accept)
         main_layout.addWidget(close_button, 0, Qt.AlignRight)
+
+
+class ElidedLabel(QLabel):
+    """QLabel that elides long text with '...' and updates on resize.
+
+    Usage: l = ElidedLabel('A very long title'); l.setToolTip(full_text)
+    """
+    def __init__(self, text='', parent=None):
+        super().__init__(parent)
+        self._full_text = str(text or '')
+        self.setText(self._full_text)
+
+    def setText(self, text):
+        # store full text and update display
+        try:
+            self._full_text = str(text or '')
+        except Exception:
+            self._full_text = ''
+        super().setText(self._full_text)
+        self._update_elided()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._update_elided()
+
+    def _update_elided(self):
+        try:
+            fm = QFontMetrics(self.font())
+            # subtract padding allowance
+            avail = max(8, self.width() - 24)
+            elided = fm.elidedText(self._full_text, Qt.ElideRight, avail)
+            super().setText(elided)
+            # always show full text on tooltip
+            if self._full_text:
+                self.setToolTip(self._full_text)
+        except Exception:
+            pass
 
 # ==============================================================================
 # LỚP 3: TaskWidget (Phiên bản đầy đủ và đã sửa lỗi)
@@ -193,55 +235,167 @@ class TaskWidget(QFrame):
         self._update_note_icon()
 
 
-class TaskBadge(QLabel):
-    """A compact, rounded badge used inside calendar day tiles to represent a task.
+class TaskBadge(QFrame):
+    """Compact task badge shown in calendar tile with an interactive checkbox on the right.
 
-    This is a visual-only lightweight widget; interactions (edit/toggle) should be done
-    in the DayDetailDialog or via context menus if desired.
+    Provides: title label, optional tooltip (note), and a checkbox that toggles completion
+    with permission checks via calendar_ref.
     """
     def __init__(self, title, color='#66bb6a', note='', assignee_name=None, parent=None, task_id=None, is_group=False, calendar_ref=None):
         super().__init__(parent)
         self.setObjectName('TaskBadge')
-        self.setText(title if title else '')
-        self.setToolTip(note if note else title)
-        self.setWordWrap(False)
-        self.setContentsMargins(6, 4, 6, 4)
         self.task_id = task_id
         self.is_group = is_group
         self.calendar_ref = calendar_ref
+        self.note = note
         self.assignee_name = assignee_name
-        # color may be a hex; use different default for group vs personal
-        style = f"background: {color}; color: white; padding: 6px 10px; border-radius: 12px; font-size: 11px;"
-        self.setStyleSheet(style)
-        self.setMinimumHeight(26)
-        self.setMaximumWidth(220)
+        self.title = title or ''
+
+        self.setContentsMargins(0, 0, 0, 0)
+        # make badges larger for readability
+        self.setFixedHeight(36)
+        self.setMaximumWidth(340)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 2, 6, 2)
+        layout.setSpacing(8)
+
+        # optional left indicator: group icon or assignee initial
+        self.icon_label = QLabel()
+        self.icon_label.setFixedSize(20, 20)
+        self.icon_label.setStyleSheet('border-radius:8px;')
+        # default empty, will be set below when is_group / assignee present
+        layout.addWidget(self.icon_label, 0, Qt.AlignVCenter)
+
+        self.label = ElidedLabel(self.title)
+        self.label.setStyleSheet('color: white; font-size: 13px; font-weight:600;')
+        self.label.setWordWrap(False)
+        self.label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        # allow widget to shrink text with elide if too long in layout (handled by QLabel width)
+        layout.addWidget(self.label, 1)
+
+        # interactive check control on the right — use a small checkable QPushButton
+        # We keep the attribute name `checkbox` for backward compatibility so other code can call
+        # .setChecked/.isChecked and we connect to toggled events.
+        from PyQt5.QtWidgets import QPushButton
+        self.checkbox = QPushButton('')
+        self.checkbox.setCheckable(True)
+        # larger clickable area for touch and visibility
+        self.checkbox.setFixedSize(24, 24)
+        # show a visible check mark when checked; no text when unchecked
+        self.checkbox.setStyleSheet(
+            'QPushButton { background: rgba(255,255,255,0.12); border-radius: 6px; border: none; color: white; font-weight: bold; }'
+            'QPushButton:checked { background: white; color: #2b2b2b; }'
+        )
+        layout.addWidget(self.checkbox, 0, Qt.AlignRight)
+
+        # visual style
+        base_style = f'background: {color}; border-radius: 12px; padding: 4px;'
+        self.setStyleSheet(base_style)
+        # if group task, show a subtle left marker and slightly different tint
+        try:
+            if self.is_group:
+                # small white circle with group emoji (keeps compact)
+                self.icon_label.setText('👥')
+                self.icon_label.setStyleSheet('font-size:11px; color: white; background: rgba(0,0,0,0.12); border-radius:8px;')
+            else:
+                # hide icon area by setting transparent background
+                self.icon_label.setText('')
+                self.icon_label.setStyleSheet('background: transparent;')
+        except Exception:
+            pass
+        # add drop shadow for depth
+        try:
+            shadow = QGraphicsDropShadowEffect(self)
+            shadow.setBlurRadius(12)
+            shadow.setOffset(0, 4)
+            shadow.setColor(QColor(0, 0, 0, 80))
+            self.setGraphicsEffect(shadow)
+        except Exception:
+            pass
+        # add opacity effect and an animation to highlight changes
+        try:
+            opacity = QGraphicsOpacityEffect(self)
+            opacity.setOpacity(1.0)
+            self._opacity_effect = opacity
+            self.setGraphicsEffect(opacity)
+            self._anim = QPropertyAnimation(opacity, b"opacity")
+            self._anim.setDuration(220)
+            self._anim.setEasingCurve(QEasingCurve.InOutQuad)
+        except Exception:
+            self._anim = None
+        # tooltip is handled by ElidedLabel for title; keep separate tooltip for note
+        try:
+            if note:
+                self.setToolTip(note)
+        except Exception:
+            pass
+
+        # connect toggled to our handler; handler will accept bool or int
+        self.checkbox.toggled.connect(self._on_checkbox_changed)
+
+        # interaction state for dragging
+        self.drag_start_position = None
+
+    def text(self):
+        return self.title
 
     def mousePressEvent(self, event):
-        # If a short click and the badge has a 'day' attribute, open day detail dialog
         try:
-            if event.button() == Qt.LeftButton and hasattr(self, 'day') and self.calendar_ref:
-                # open day detail via calendar_ref
-                try:
-                    self.calendar_ref.open_day_detail(self.day)
-                    return
-                except Exception:
-                    pass
-            # otherwise start possible drag
+            # register drag start position on left click; do NOT open detail on single click
             if event.button() == Qt.LeftButton:
                 self.drag_start_position = event.pos()
         except Exception:
             pass
 
-    def _update_note_icon(self):
-        # placeholder for compatibility with TaskWidget
-        return
-
     def mouseDoubleClickEvent(self, event):
-        # Allow editing note on double click if needed
+        # double-clicking a TaskBadge opens a single-task detail dialog
         try:
-            new_note, ok = QInputDialog.getMultiLineText(self, "Sửa Ghi Chú", "Nội dung ghi chú:", getattr(self, 'note', ''))
-            if ok:
-                self.note = new_note
+            if event.button() == Qt.LeftButton and self.calendar_ref:
+                try:
+                    # build a small dialog containing TaskDetailItemWidget for this task
+                    from PyQt5.QtWidgets import QDialog, QVBoxLayout, QDialogButtonBox
+                    dlg = QDialog(self)
+                    dlg.setWindowTitle('Chi tiết công việc')
+                    dlg.setMinimumWidth(420)
+                    data = {
+                        'title': self.title,
+                        'is_done': bool(self.checkbox.isChecked()),
+                        'note': self.note,
+                        'assignee_name': self.assignee_name,
+                        'due_at': None,
+                        'task_id': self.task_id,
+                        'is_group': self.is_group
+                    }
+                    content = TaskDetailItemWidget(data, calendar_ref=self.calendar_ref)
+                    layout = QVBoxLayout(dlg)
+                    layout.addWidget(content)
+                    buttons = QDialogButtonBox(QDialogButtonBox.Close)
+                    buttons.rejected.connect(dlg.reject)
+                    layout.addWidget(buttons)
+                    dlg.exec_()
+                    return
+                except Exception:
+                    pass
+            super().mouseDoubleClickEvent(event)
+        except Exception:
+            try:
+                super().mouseDoubleClickEvent(event)
+            except Exception:
+                pass
+
+    def enterEvent(self, event):
+        # subtle brighten on hover
+        try:
+            self.setStyleSheet(self.styleSheet() + 'border: 1px solid rgba(255,255,255,0.18); transform: scale(1.01);')
+        except Exception:
+            pass
+
+    def leaveEvent(self, event):
+        try:
+            # revert to base by resetting to original background color (approx)
+            # keep the background color part of stylesheet unchanged; simple reset
+            self.setStyleSheet(self.styleSheet().replace('border: 1px solid rgba(255,255,255,0.18); transform: scale(1.01);', ''))
         except Exception:
             pass
 
@@ -250,23 +404,20 @@ class TaskBadge(QLabel):
             return
         if (event.pos() - self.drag_start_position).manhattanLength() < QApplication.startDragDistance():
             return
-
         drag = QDrag(self)
         mime_data = QMimeData()
-        mime_data.setProperty("task_widget_ref", self)
+        mime_data.setProperty('task_widget_ref', self)
         drag.setMimeData(mime_data)
-        
         pixmap = self.grab()
         drag.setPixmap(pixmap)
         drag.setHotSpot(event.pos())
         drag.exec_(Qt.CopyAction)
-    
+
     def contextMenuEvent(self, event):
         context_menu = QMenu(self)
-        delete_action = context_menu.addAction("Xóa công việc này")
+        delete_action = context_menu.addAction('Xóa công việc này')
         action = context_menu.exec_(self.mapToGlobal(event.pos()))
         if action == delete_action:
-            # If this widget is backed by a DB task, request deletion via calendar_ref
             try:
                 if self.task_id and self.calendar_ref:
                     self.calendar_ref.delete_task(self.task_id, self.is_group)
@@ -275,25 +426,87 @@ class TaskBadge(QLabel):
             self.deleteLater()
 
     def _on_checkbox_changed(self, state):
-        is_done = 1 if state == Qt.Checked else 0
-        # optimistic UI is already updated by the checkbox
+        # state may be bool (QPushButton.toggled) or int (Qt.Checked from QCheckBox)
+        if isinstance(state, bool):
+            is_done = 1 if state else 0
+        else:
+            is_done = 1 if state == Qt.Checked else 0
+        # Optimistic UI: update visuals immediately, then persist; revert on failure
         try:
-            if self.task_id and self.calendar_ref:
-                # Permission check: ask calendar if current user can toggle this task
+            if not self.task_id or not self.calendar_ref:
+                return
+
+            # permission check first
+            try:
+                allowed, msg = self.calendar_ref.can_toggle_task(self.task_id, self.is_group)
+            except Exception:
+                allowed, msg = False, 'Lỗi kiểm tra quyền.'
+            if not allowed:
+                # revert immediately
+                self.checkbox.blockSignals(True)
+                # set checked state back
+                self.checkbox.setChecked(not bool(is_done))
+                # update visible tick for QPushButton
                 try:
-                    allowed, msg = self.calendar_ref.can_toggle_task(self.task_id, self.is_group)
+                    self.checkbox.setText('✓' if self.checkbox.isChecked() else '')
                 except Exception:
-                    allowed, msg = False, "Lỗi kiểm tra quyền."
-                if not allowed:
-                    # revert checkbox to previous state
-                    self.checkbox.blockSignals(True)
-                    self.checkbox.setChecked(not bool(is_done))
-                    self.checkbox.blockSignals(False)
-                    # show message to user
-                    QMessageBox.warning(self, "Không có quyền", msg)
-                    return
-                # call calendar wrapper to persist change
-                self.calendar_ref.update_task_status(self.task_id, is_done, self.is_group)
+                    pass
+                self.checkbox.blockSignals(False)
+                QMessageBox.warning(self, 'Không có quyền', msg)
+                return
+
+            # optimistic style
+            # show tick mark on the QPushButton if used
+            try:
+                self.checkbox.setText('✓' if bool(is_done) else '')
+            except Exception:
+                pass
+            if is_done:
+                self.setStyleSheet('background: #bdbdbd; border-radius: 12px; padding: 4px; color: #fff;')
+                self.label.setStyleSheet('color: #fff; text-decoration: line-through; font-size:11px;')
+            else:
+                self.setStyleSheet('background: #66bb6a; border-radius: 12px; padding: 4px;')
+                self.label.setStyleSheet('color: #fff; font-size:11px;')
+
+            # persist change via calendar API which now returns boolean success
+            try:
+                success = self.calendar_ref.update_task_status(self.task_id, is_done, self.is_group)
+            except Exception:
+                success = False
+
+            if not success:
+                # revert visuals and checkbox
+                self.checkbox.blockSignals(True)
+                self.checkbox.setChecked(not bool(is_done))
+                try:
+                    self.checkbox.setText('✓' if self.checkbox.isChecked() else '')
+                except Exception:
+                    pass
+                self.checkbox.blockSignals(False)
+                # revert styles
+                if not is_done:
+                    self.setStyleSheet('background: #bdbdbd; border-radius: 12px; padding: 4px;')
+                    self.label.setStyleSheet('color:#fff; text-decoration: line-through; font-size:11px;')
+                else:
+                    self.setStyleSheet('background: #66bb6a; border-radius: 12px; padding: 4px;')
+                    self.label.setStyleSheet('color:#fff; font-size:11px;')
+                QMessageBox.warning(self, 'Lỗi', 'Không thể cập nhật trạng thái lên server.')
+            else:
+                # animate a subtle highlight to show success
+                try:
+                    if self._anim:
+                        self._anim.stop()
+                        self._anim.setStartValue(0.6)
+                        self._anim.setEndValue(1.0)
+                        self._anim.start()
+                except Exception:
+                    pass
+                # refresh only this day to avoid full calendar redraw
+                try:
+                    if hasattr(self, 'day') and self.calendar_ref:
+                        self.calendar_ref.refresh_day(self.day)
+                except Exception:
+                    pass
         except Exception:
             pass
 
@@ -477,12 +690,22 @@ class DayWidget(QFrame):
     def add_task(self, task_widget):
         # If given a TaskBadge, attach day info and limit number displayed with an overflow indicator
         try:
-            if isinstance(task_widget, QLabel) and getattr(task_widget, 'objectName', lambda: '')() == 'TaskBadge':
+            # detect TaskBadge by objectName to support both old QLabel badges and new QFrame-based badges
+            is_badge = getattr(task_widget, 'objectName', lambda: '')() == 'TaskBadge'
+            if is_badge:
                 # set day and calendar_ref if missing
                 if not hasattr(task_widget, 'day'):
                     task_widget.day = self.day
                 if not getattr(task_widget, 'calendar_ref', None):
                     task_widget.calendar_ref = self.calendar_ref
+                # ensure badge checkbox reflects current state (if attribute exists)
+                try:
+                    if hasattr(task_widget, 'checkbox'):
+                        # leave checked state as-is if already set, otherwise default to unchecked
+                        if not hasattr(task_widget.checkbox, 'isChecked'):
+                            pass
+                except Exception:
+                    pass
                 # count existing badges
                 badges = [self.tasks_layout.itemAt(i).widget() for i in range(self.tasks_layout.count()) if self.tasks_layout.itemAt(i).widget() is not None]
                 badge_widgets = [b for b in badges if getattr(b, 'objectName', lambda: '')() == 'TaskBadge']
@@ -492,9 +715,12 @@ class DayWidget(QFrame):
                     # find existing overflow label or create one
                     overflow = None
                     for b in badges:
-                        if isinstance(b, QLabel) and b.property('is_overflow'):
-                            overflow = b
-                            break
+                        try:
+                            if b.property('is_overflow'):
+                                overflow = b
+                                break
+                        except Exception:
+                            continue
                     if not overflow:
                         overflow = QLabel()
                         overflow.setProperty('is_overflow', True)

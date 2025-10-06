@@ -2,7 +2,9 @@
 
 import calendar
 from datetime import datetime, timedelta
+import os
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QGridLayout, QApplication, QMessageBox
+from PyQt5.QtGui import QFontDatabase, QFont
 from PyQt5.QtCore import Qt
 from MainMenu.components import DayWidget, TaskWidget, GroupTaskWidget, TaskBadge
 from Managers.database_manager import Database
@@ -46,7 +48,22 @@ class CalendarWidget(QWidget):
 
     def initUI(self):
         # Modernized header with centered month label inside a pill and prev/next icons
+        # Try to load a bundled font for a nicer look
+        try:
+            font_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'assets', 'fonts', 'BeVietnamPro-Regular.ttf'))
+            if os.path.exists(font_path):
+                QFontDatabase.addApplicationFont(font_path)
+                app_font = QFont("BeVietnamPro-Regular")
+                app_font.setPointSize(10)
+                self.setFont(app_font)
+        except Exception:
+            pass
+
         self.main_layout = QVBoxLayout(self)
+        # overall background gradient (ocean theme)
+        self.setStyleSheet('''
+            QWidget { background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #e6f7ff, stop:1 #d0f0ff); }
+        ''')
         header_layout = QHBoxLayout()
         self.prev_month_btn = QPushButton("◀")
         self.prev_month_btn.setFixedSize(36, 36)
@@ -61,7 +78,12 @@ class CalendarWidget(QWidget):
         font.setPointSize(20)
         font.setBold(True)
         self.month_label.setFont(font)
-        self.month_label.setStyleSheet("padding: 10px 24px; background:#f3f4fb; border-radius:18px; color:#2b2b2b;")
+        # month label - ocean pill
+        self.month_label.setStyleSheet("padding: 10px 24px; background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0277bd, stop:1 #26c6da); border-radius:18px; color: white;")
+        font_ml = self.month_label.font()
+        font_ml.setPointSize(20)
+        font_ml.setBold(True)
+        self.month_label.setFont(font_ml)
 
         header_layout.addStretch()
         header_layout.addWidget(self.prev_month_btn)
@@ -74,7 +96,7 @@ class CalendarWidget(QWidget):
 
         # calendar grid
         self.grid_layout = QGridLayout()
-        self.grid_layout.setSpacing(12)
+        self.grid_layout.setSpacing(14)
         self.main_layout.addLayout(self.grid_layout)
 
     def _get_current_group_id(self):
@@ -238,10 +260,28 @@ class CalendarWidget(QWidget):
                             seen[day].add(key)
                             # create a visual badge for the calendar tile
                             if assignee_name:
-                                badge = TaskBadge(title, color='#5c6bc0', note=note_text, assignee_name=assignee_name, task_id=t.get('task_id'), is_group=True, calendar_ref=self)
+                                badge = TaskBadge(title, color='#5c6bc0', note=note_text, assignee_name=assignee_name, parent=None, task_id=t.get('task_id'), is_group=True, calendar_ref=self)
+                                try:
+                                    # set checked state without emitting toggled signal to avoid recursion
+                                    badge.checkbox.blockSignals(True)
+                                    badge.checkbox.setChecked(bool(is_done))
+                                    badge.checkbox.setText('✓' if bool(is_done) else '')
+                                    badge.checkbox.blockSignals(False)
+                                except Exception:
+                                    pass
+                                if is_done:
+                                    badge.setStyleSheet("background: #bdbdbd; border-radius: 12px; padding: 4px;")
+                                    badge.label.setStyleSheet('color:#fff; text-decoration: line-through; font-size:11px;')
                                 day_widget.add_task(badge)
                             else:
-                                badge = TaskBadge(title, color='#66bb6a', note=note_text, task_id=t.get('task_id'), is_group=False, calendar_ref=self)
+                                badge = TaskBadge(title, color='#66bb6a', note=note_text, parent=None, task_id=t.get('task_id'), is_group=False, calendar_ref=self)
+                                try:
+                                    badge.checkbox.setChecked(bool(is_done))
+                                except Exception:
+                                    pass
+                                if is_done:
+                                    badge.setStyleSheet("background: #bdbdbd; border-radius: 12px; padding: 4px;")
+                                    badge.label.setStyleSheet('color:#fff; text-decoration: line-through; font-size:11px;')
                                 day_widget.add_task(badge)
 
     def _fetch_personal_tasks_for_month(self):
@@ -414,6 +454,17 @@ class CalendarWidget(QWidget):
                                 # Use visual TaskBadge inside calendar tiles; keep TaskWidget for detail dialogs
                                 color = '#66bb6a' if not assignee_name else '#5c6bc0'
                                 badge = TaskBadge(title, color=color, note=note, assignee_name=assignee_name, task_id=t.get('task_id'), is_group=bool(assignee_name), calendar_ref=self)
+                                # ensure badge checkbox matches DB state and apply done style (block signals while doing so)
+                                try:
+                                    badge.checkbox.blockSignals(True)
+                                    badge.checkbox.setChecked(bool(is_done))
+                                    badge.checkbox.setText('✓' if bool(is_done) else '')
+                                    badge.checkbox.blockSignals(False)
+                                except Exception:
+                                    pass
+                                if is_done:
+                                    badge.setStyleSheet("background: #bdbdbd; border-radius: 12px; padding: 4px;")
+                                    badge.label.setStyleSheet('color:#fff; text-decoration: line-through; font-size:11px;')
                                 day_widget.add_task(badge)
                     except Exception as e:
                         print(f"Lỗi khi hiển thị task: {e}")
@@ -432,6 +483,7 @@ class CalendarWidget(QWidget):
             label = QLabel(day)
             label.setObjectName("WeekDayLabel")
             label.setAlignment(Qt.AlignCenter)
+            label.setStyleSheet('color: #02457a; font-weight:700; background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #bfe9ff, stop:1 #e6f7ff); padding:8px; border-radius:6px;')
             self.grid_layout.addWidget(label, 0, i)
 
     def prev_month(self):
@@ -539,7 +591,7 @@ class CalendarWidget(QWidget):
         """Update the is_done status for a personal or group task.
 
         This is called by TaskWidget when the user toggles the checkbox.
-        We persist the change and refresh the calendar display.
+        We persist the change. Caller may refresh specific day via refresh_day(day) to avoid full redraw.
         """
         try:
             if not task_id:
@@ -549,11 +601,35 @@ class CalendarWidget(QWidget):
                 self.db.update_group_task_status(task_id, is_done)
             else:
                 self.db.update_task_status(task_id, is_done)
-            # Optionally refresh to reflect any UI changes coming from DB side
-            self.populate_calendar()
+            # Do not call populate_calendar here to avoid full redraw; caller should call refresh_day(day)
             print(f"Cập nhật trạng thái task id={task_id} group={is_group} -> is_done={is_done}")
+            return True
         except Exception as e:
             print(f"Lỗi khi cập nhật trạng thái task: {e}")
+            return False
+
+    def refresh_day(self, day: int):
+        """Refresh widgets for a single day (day = 1..31) without re-rendering whole calendar.
+
+        This fetches tasks for the current month and updates only the targeted DayWidget.
+        """
+        try:
+            # collect tasks for the month then pick the single day
+            if self.current_view_mode == 'personal':
+                tasks = self._fetch_personal_tasks_for_month()
+            else:
+                tasks = self._fetch_group_tasks_for_month()
+
+            tasks_for_day = {}
+            if isinstance(tasks, dict) and day in tasks:
+                tasks_for_day[day] = tasks[day]
+            else:
+                tasks_for_day[day] = []
+
+            # delegate to _display_tasks which handles clearing/adding for days present in dict
+            self._display_tasks(tasks_for_day)
+        except Exception as e:
+            print(f"Lỗi khi refresh day {day}: {e}")
 
     def can_toggle_task(self, task_id: int, is_group: bool = False) -> tuple:
         """Check whether the current user is allowed to toggle the given task.
