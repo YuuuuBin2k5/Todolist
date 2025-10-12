@@ -251,6 +251,18 @@ class LoginRegisterApp(QMainWindow):
         self.animation_toggle = QPropertyAnimation(self.toggle_panel, b"pos")
         self.animation_toggle.setDuration(ANIMATION_DURATION_MS)
 
+        # Lấy thông tin hình học của màn hình chính
+        screen_geometry = QApplication.primaryScreen().geometry()
+        
+        # Lấy thông tin hình học của cửa sổ ứng dụng (bao gồm cả viền)
+        window_geometry = self.frameGeometry()
+        
+        # Di chuyển tâm của hình chữ nhật cửa sổ đến tâm của màn hình
+        window_geometry.moveCenter(screen_geometry.center())
+        
+        # Di chuyển vị trí top-left của cửa sổ đến vị trí mới đã tính toán
+        self.move(window_geometry.topLeft())
+        
     def closeEvent(self, event):
         if not self._allow_close:
             reply = QMessageBox.question(self, "Xác nhận Thoát", "Bạn có chắc chắn muốn thoát không?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)

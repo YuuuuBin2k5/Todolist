@@ -1,672 +1,506 @@
-# Trong file MainMenu/calendar_widget.py
+# --- Nhập các thư viện và module cần thiết ---
+import calendar  # Thư viện để làm việc với lịch
+import os  # Thư viện để tương tác với hệ điều hành, dùng để lấy đường dẫn file
+from datetime import datetime, timedelta  # Thư viện để xử lý ngày và giờ
+from typing import Optional
 
-import calendar
-from datetime import datetime, timedelta
-import os
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QGridLayout, QApplication, QMessageBox
+# Nhập các thành phần giao diện từ PyQt5
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QGridLayout, QMessageBox
 from PyQt5.QtGui import QFontDatabase, QFont
 from PyQt5.QtCore import Qt
-from MainMenu.components import DayWidget, TaskWidget, GroupTaskWidget, TaskBadge
+
+# Nhập các widget tùy chỉnh và lớp quản lý database
+from MainMenu.components import DayWidget, TaskBadge
 from Managers.database_manager import Database
 from config import CALENDAR_BG_GRADIENT_START, CALENDAR_BG_GRADIENT_END, CALENDAR_MONTH_PILL_START, CALENDAR_MONTH_PILL_END, FONT_PATH
 
 calendar.setfirstweekday(calendar.SUNDAY)
 
 VIETNAMESE_MONTHS = [
-    "Tháng Một", "Tháng Hai", "Tháng Ba", "Tháng Tư", "Tháng Năm", "Tháng Sáu",
-    "Tháng Bảy", "Tháng Tám", "Tháng Chín", "Tháng Mười", "Tháng Mười Một", "Tháng Mười Hai"
+    "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6",
+    "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"
 ]
 
 class CalendarWidget(QWidget):
-    def __init__(self, user_id, db=None, parent=None):
-        # Signature: (user_id, db=None, parent=None)
-        # Accept a Database instance as the second (keyword) argument. If a
-        # Database isn't provided, create a local one. Avoid treating a
-        # Database object as the QWidget parent (was the source of the
-        # unexpected-type error during login where Database was passed
-        # positionally as the parent).
-        super().__init__(parent)
-        self.user_id = user_id
-        self.db = Database()
-            
-        self.current_date = datetime.now()
+    def __init__(self, user_id, db_manager, parent=None): 
+        """
+        Hàm khởi tạo cho CalendarWidget.
         
-        # [MỚI] Thêm trạng thái để biết đang xem lịch cá nhân hay nhóm
-        self.current_view_mode = 'personal' 
-        self.user_names_cache = {} # Cache để lưu tên user, tránh query nhiều lần
-        self.current_group_id = None
-        self.current_group_leader_id = None
+        Args:
+            user_id (int): ID của người dùng đang đăng nhập.
+            db_manager (Database): Đối tượng quản lý CSDL được truyền từ MainWindow.
+            parent (QWidget, optional): Widget cha. Mặc định là None.
+        """
+        super().__init__(parent)  # Gọi hàm khởi tạo của lớp cha (QWidget)
+        self.current_user_id = user_id  # Lưu ID của người dùng hiện tại
+        self.db_manager = db_manager  # Sử dụng đối tượng db_manager được truyền vào
+        
+        self.current_display_date = datetime.now()  # Ngày hiện tại sẽ được hiển thị trên lịch
+        
+        # Các thuộc tính để quản lý trạng thái của lịch
+        self.view_mode = 'personal'  # Chế độ xem mặc định là 'personal'
+        self.user_names_cache = {}  # Bộ đệm để lưu tên người dùng, tránh truy vấn CSDL nhiều lần
+        self.current_group_id = None  # ID của nhóm đang được xem (nếu ở chế độ 'group')
+        self.current_group_leader_id = None  # ID của trưởng nhóm hiện tại
 
-        self.initUI()
-        self.populate_calendar()
+        self.initialize_ui()  # Khởi tạo các thành phần giao diện người dùng
+        self.populate_calendar_grid()  # Điền dữ liệu ngày và công việc vào lưới lịch
 
-    # [MỚI] Hàm để chuyển đổi chế độ xem
-    def switch_view_mode(self, mode):
-        print(f"CalendarWidget chuyển sang chế độ: {mode}")
-        self.current_view_mode = mode
-        self.populate_calendar() # Tải lại lịch với chế độ mới
+    def switch_view_mode(self, mode, group_id=None):
+        """
+        Chuyển đổi chế độ xem giữa lịch cá nhân và lịch nhóm.
+        
+        Args:
+            mode (str): Chế độ mới ('personal' hoặc 'group').
+            group_id (int, optional): ID của nhóm nếu chuyển sang chế độ xem nhóm.
+        """
+        print(f"CalendarWidget: Chuyển sang chế độ {mode} cho nhóm {group_id}")
+        self.view_mode = mode  # Cập nhật chế độ xem
+        self.set_group_context(group_id)  # Cập nhật thông tin về nhóm (nếu có)
+        self.populate_calendar_grid()  # Tải lại toàn bộ lịch với dữ liệu của chế độ mới
 
-    def set_group_context(self, group_id: int):
-        """Set current group id and leader id for permission checks."""
-        self.current_group_id = group_id
+    def set_group_context(self, group_id):
+        """
+        Thiết lập ID nhóm và ID trưởng nhóm để kiểm tra quyền hạn.
+        
+        Args:
+            group_id (int): ID của nhóm đang được xem.
+        """
+        self.current_group_id = group_id  # Lưu ID của nhóm
+        if group_id is not None:
+            try:
+                # Lấy ID trưởng nhóm từ CSDL và lưu lại
+                self.current_group_leader_id = self.db_manager.get_group_leader(group_id)
+            except Exception as error:
+                print(f"Lỗi khi lấy thông tin trưởng nhóm: {error}")
+                self.current_group_leader_id = None
+        else:
+            self.current_group_leader_id = None # Reset khi không ở trong nhóm nào
+
+    def initialize_ui(self):
+        """
+        Xây dựng giao diện người dùng ban đầu cho widget lịch.
+        """
+        # Tải font chữ tùy chỉnh để giao diện đẹp hơn
         try:
-            self.current_group_leader_id = self.db.get_group_leader(group_id)
-        except Exception:
-            self.current_group_leader_id = None
-
-    def initUI(self):
-        # Modernized header with centered month label inside a pill and prev/next icons
-        # Try to load a bundled font for a nicer look
-        try:
-            # Prefer centralized FONT_PATH if available
-            font_path = FONT_PATH
-            if os.path.exists(font_path):
-                QFontDatabase.addApplicationFont(font_path)
-                app_font = QFont("BeVietnamPro-Regular")
-                app_font.setPointSize(10)
+            if os.path.exists(FONT_PATH):
+                QFontDatabase.addApplicationFont(FONT_PATH)
+                app_font = QFont("BeVietnamPro-Regular", 10)
                 self.setFont(app_font)
-        except Exception:
-            pass
+        except Exception as error:
+            print(f"Không thể tải font tùy chỉnh: {error}")
 
+        # Layout chính của widget, sắp xếp các thành phần theo chiều dọc
         self.main_layout = QVBoxLayout(self)
-        # overall background gradient (ocean theme)
+        
+        # Thiết lập màu nền gradient cho toàn bộ widget
         self.setStyleSheet(f'''
-            QWidget {{ background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 {CALENDAR_BG_GRADIENT_START}, stop:1 {CALENDAR_BG_GRADIENT_END}); }}
+            QWidget {{ 
+                background: qlineargradient(
+                    spread:pad, x1:0, y1:0, x2:1, y2:1, 
+                    stop:0 {CALENDAR_BG_GRADIENT_START}, 
+                    stop:1 {CALENDAR_BG_GRADIENT_END}
+                ); 
+            }}
         ''')
-        header_layout = QHBoxLayout()
-        self.prev_month_btn = QPushButton("◀")
-        self.prev_month_btn.setFixedSize(36, 36)
-        self.prev_month_btn.clicked.connect(self.prev_month)
-        self.next_month_btn = QPushButton("▶")
-        self.next_month_btn.setFixedSize(36, 36)
-        self.next_month_btn.clicked.connect(self.next_month)
 
-        self.month_label = QLabel()
-        self.month_label.setAlignment(Qt.AlignCenter)
-        font = self.month_label.font()
+        # --- Phần Header (Chứa nút điều hướng và tên tháng) ---
+        header_layout = QHBoxLayout()  # Layout cho header, sắp xếp theo chiều ngang
+
+        # Nút "Tháng trước"
+        self.prev_month_button = QPushButton("◀")
+        self.prev_month_button.setFixedSize(36, 36)
+        self.prev_month_button.clicked.connect(self.go_to_previous_month)
+        
+        # Nút "Tháng sau"
+        self.next_month_button = QPushButton("▶")
+        self.next_month_button.setFixedSize(36, 36)
+        self.next_month_button.clicked.connect(self.go_to_next_month)
+
+        # Nhãn hiển thị tên tháng và năm
+        self.month_year_label = QLabel()
+        self.month_year_label.setAlignment(Qt.AlignCenter)
+        font = self.month_year_label.font()
         font.setPointSize(20)
         font.setBold(True)
-        self.month_label.setFont(font)
-        # month label - ocean pill
-        self.month_label.setStyleSheet(f"padding: 10px 24px; background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {CALENDAR_MONTH_PILL_START}, stop:1 {CALENDAR_MONTH_PILL_END}); border-radius:18px; color: white;")
+        self.month_year_label.setFont(font)
+        self.month_year_label.setStyleSheet(f"""
+            padding: 10px 24px; 
+            background: qlineargradient(
+                x1:0, y1:0, x2:1, y2:0, 
+                stop:0 {CALENDAR_MONTH_PILL_START}, 
+                stop:1 {CALENDAR_MONTH_PILL_END}
+            ); 
+            border-radius: 18px; 
+            color: white;
+        """)
 
+        # Sắp xếp các thành phần trong header
         header_layout.addStretch()
-        header_layout.addWidget(self.prev_month_btn)
+        header_layout.addWidget(self.prev_month_button)
         header_layout.addSpacing(8)
-        header_layout.addWidget(self.month_label)
+        header_layout.addWidget(self.month_year_label)
         header_layout.addSpacing(8)
-        header_layout.addWidget(self.next_month_btn)
+        header_layout.addWidget(self.next_month_button)
         header_layout.addStretch()
         self.main_layout.addLayout(header_layout)
 
-        # calendar grid
-        self.grid_layout = QGridLayout()
-        self.grid_layout.setSpacing(14)
-        self.main_layout.addLayout(self.grid_layout)
+        # --- Lưới Lịch ---
+        self.calendar_grid_layout = QGridLayout()
+        self.calendar_grid_layout.setSpacing(14)
+        self.main_layout.addLayout(self.calendar_grid_layout)
 
-    def _get_current_group_id(self):
-        """Return the current group id if set; otherwise try to find a group for the user.
-
-        This is used by DayWidget when adding group tasks from a day cell.
+    def _get_user_name_from_cache(self, user_id: Optional[int]) -> Optional[str]:
         """
-        if self.current_group_id:
-            return self.current_group_id
-        try:
-            groups = self.db.get_groups_for_user(self.user_id)
-            if groups:
-                return groups[0][0]
-        except Exception:
-            pass
-        return None
-
-    def _parse_iso_datetime(self, s: str):
-        """Try to parse many ISO-like datetime strings into a datetime object.
-
-        Accepts formats like:
-          - 2025-10-06 05:24:08
-          - 2025-10-06T05:24:08Z
-          - 2025-10-06
-        Returns datetime or None on failure.
-        """
-        if not s:
-            return None
-        if isinstance(s, datetime):
-            return s
-        s = str(s)
-        # try fromisoformat with Z -> +00:00 replacement
-        try:
-            if s.endswith('Z'):
-                return datetime.fromisoformat(s.replace('Z', '+00:00'))
-            return datetime.fromisoformat(s)
-        except Exception:
-            pass
-        # replace T with space and strip Z
-        try:
-            s2 = s.replace('T', ' ').rstrip('Z')
-            try:
-                return datetime.strptime(s2, '%Y-%m-%d %H:%M:%S')
-            except Exception:
-                return datetime.strptime(s2, '%Y-%m-%d')
-        except Exception:
-            return None
-
-    # setup_week_headers and clear_calendar are implemented later in this file
-    # to keep a single canonical implementation (see below).
+        Lấy tên người dùng từ bộ đệm hoặc từ CSDL nếu chưa có.
+        
+        Hàm này trả về `None` trong hai trường hợp:
+        1. Khi `user_id` không được cung cấp (ví dụ: công việc chưa được giao).
+        2. Khi `user_id` có nhưng không tìm thấy người dùng tương ứng trong CSDL.
+        
+        Args:
+            user_id (Optional[int]): ID của người dùng cần lấy tên.
                 
-    def populate_calendar(self, tasks_by_day=None):
+        Returns:
+            Optional[str]: Tên người dùng nếu tìm thấy, ngược lại là None.
         """
-            Vẽ lại toàn bộ lịch cho tháng hiện tại (lưu trong self.current_date).
-            Args:
-                tasks_by_day (dict): Dictionary với key là ngày (int) và value là list các task tuple
-        """
-        self.clear_calendar() # Xóa lịch cũ
-        self.setup_week_headers() # Vẽ lại tiêu đề tuần (vì cũng bị xóa ở trên)
-        
-        month_name = VIETNAMESE_MONTHS[self.current_date.month - 1]
-        self.month_label.setText(f"{month_name} {self.current_date.year}")
-        calendar.setfirstweekday(calendar.SUNDAY)
-        month_calendar = calendar.monthcalendar(self.current_date.year, self.current_date.month)
-        
-
-        # Duyệt qua từng tuần và từng ngày để tạo DayWidget
-        today = datetime.now()
-
-
-        for week_num, week_data in enumerate(month_calendar):
-            for day_num, day_data in enumerate(week_data):
-                if day_data != 0:
-                    day_widget = DayWidget(str(day_data), self.current_date.year, self.current_date.month, calendar_ref=self)
-                    self.grid_layout.addWidget(day_widget, week_num + 1, day_num)
-
-                    if(self.current_date.year == today.year and
-                       self.current_date.month == today.month and
-                       day_data == today.day):
-                        day_widget.set_today_highlight(True)
-
-                    # Thêm widget ngày vào lưới tại đúng vị trí hàng (tuần) và cột (thứ)
-                    # (đã thêm ở trên)
-        
-        # Nếu caller truyền sẵn tasks_by_day thì dùng nó (tránh fetch 2 lần).
-        # Ngược lại widget sẽ tự fetch từ DB theo current_view_mode.
-        if tasks_by_day:
-            tasks = tasks_by_day
-        else:
-            if self.current_view_mode == 'personal':
-                tasks = self._fetch_personal_tasks_for_month()
-            else:
-                tasks = self._fetch_group_tasks_for_month()
-
-        if tasks:
-            self._display_tasks(tasks)
-        
-
-    def add_tasks_from_data(self, tasks_by_day):
-        """
-            Thêm tasks từ dữ liệu thực tế vào lịch.
-            Args:
-                tasks_by_day (dict): Dictionary với key là ngày (int) và value là list các task tuple
-        """
-        # Duyệt qua các ô trong lưới để tìm DayWidget tương ứng và thêm task
-        # Keep a per-day set of seen tasks to avoid duplicates
-        seen = {}
-        for row in range(1, self.grid_layout.rowCount()):
-            for col in range(self.grid_layout.columnCount()):
-                item = self.grid_layout.itemAtPosition(row, col)
-                if item and isinstance(item.widget(), DayWidget):
-                    day_widget = item.widget()
-                    day = int(day_widget.date_label.text()) # Lấy số ngày từ label
-                    if day in tasks_by_day:
-                        # ensure previous tasks (if any) are cleared before adding
-                        try:
-                            day_widget.clear_tasks()
-                        except Exception:
-                            pass
-                        if day not in seen:
-                            seen[day] = set()
-                        for task_data in tasks_by_day[day]:
-                            # normalize various forms (dict or tuple) into fields
-                            t = None
-                            if isinstance(task_data, dict):
-                                t = {
-                                    'task_id': task_data.get('task_id'),
-                                    'title': task_data.get('title'),
-                                    'is_done': task_data.get('is_done', False),
-                                    'note': task_data.get('note', ''),
-                                    'due_at': task_data.get('due_at'),
-                                    'assignee_name': task_data.get('assignee_name') or ''
-                                }
-                            else:
-                                # support tuple shapes like (task_id, title, is_done, note, due_at)
-                                try:
-                                    if len(task_data) >= 5:
-                                        t = {
-                                            'task_id': task_data[0],
-                                            'title': task_data[1],
-                                            'is_done': bool(task_data[2]),
-                                            'note': task_data[3],
-                                            'due_at': task_data[4],
-                                            'assignee_name': ''
-                                        }
-                                    else:
-                                        # fallback to (title, is_done, note)
-                                        title, is_done_val, note_text = task_data
-                                        t = {'task_id': None, 'title': title, 'is_done': bool(is_done_val), 'note': note_text, 'due_at': None, 'assignee_name': ''}
-                                except Exception:
-                                    continue
-
-                            title = t['title']
-                            is_done = t['is_done']
-                            note_text = t.get('note', '')
-                            due_at = t.get('due_at')
-                            assignee_name = t.get('assignee_name', '')
-                            key = ('id', t['task_id']) if t.get('task_id') else (title, due_at, assignee_name)
-                            if key in seen[day]:
-                                continue
-                            seen[day].add(key)
-                            # create a visual badge for the calendar tile
-                            if assignee_name:
-                                badge = TaskBadge(title, color='#5c6bc0', note=note_text, assignee_name=assignee_name, parent=None, task_id=t.get('task_id'), is_group=True, calendar_ref=self)
-                                try:
-                                    # set checked state without emitting toggled signal to avoid recursion
-                                    badge.checkbox.blockSignals(True)
-                                    badge.checkbox.setChecked(bool(is_done))
-                                    badge.checkbox.setText('✓' if bool(is_done) else '')
-                                    badge.checkbox.blockSignals(False)
-                                except Exception:
-                                    pass
-                                if is_done:
-                                    badge.setStyleSheet("background: #bdbdbd; border-radius: 12px; padding: 4px;")
-                                    badge.label.setStyleSheet('color:#fff; text-decoration: line-through; font-size:11px;')
-                                day_widget.add_task(badge)
-                            else:
-                                badge = TaskBadge(title, color='#66bb6a', note=note_text, parent=None, task_id=t.get('task_id'), is_group=False, calendar_ref=self)
-                                try:
-                                    badge.checkbox.setChecked(bool(is_done))
-                                except Exception:
-                                    pass
-                                if is_done:
-                                    badge.setStyleSheet("background: #bdbdbd; border-radius: 12px; padding: 4px;")
-                                    badge.label.setStyleSheet('color:#fff; text-decoration: line-through; font-size:11px;')
-                                day_widget.add_task(badge)
-
-    def _fetch_personal_tasks_for_month(self):
-        # Đổi tên hàm cũ _fetch_tasks_for_month thành _fetch_personal_tasks_for_month
-        # Logic bên trong giữ nguyên
-        tasks_by_day = {}
-        month_str = self.current_date.strftime('%Y-%m')
-        try:
-            all_tasks = self.db.get_tasks_for_user_month(self.user_id, month_str)
-            # all_tasks: list of tuples (task_id, title, is_done, note, due_at)
-            for task in all_tasks:
-                task_id, title, is_done_int, note, due_at_str = task
-                if due_at_str:
-                    dt = self._parse_iso_datetime(due_at_str)
-                    if not dt:
-                        continue
-                    day = dt.day
-                    if day not in tasks_by_day:
-                        tasks_by_day[day] = []
-                    tasks_by_day[day].append({
-                        'task_id': task_id,
-                        'title': title,
-                        'is_done': bool(is_done_int),
-                        'note': note,
-                        'due_at': due_at_str,
-                        'assignee_id': None,
-                        'assignee_name': None,
-                    })
-            # Additionally include any group tasks assigned to this user in the same month
-            try:
-                group_tasks = self.db.get_group_tasks_for_user_month(self.user_id, month_str)
-                for gt in group_tasks:
-                    # gt: (task_id, group_id, assignee_id, title, note, is_done, due_at)
-                    g_task_id, g_group_id, g_assignee_id, g_title, g_note, g_is_done, g_due_at = gt
-                    if g_due_at:
-                        g_dt = self._parse_iso_datetime(g_due_at)
-                        if not g_dt:
-                            continue
-                        g_day = g_dt.day
-                        if g_day not in tasks_by_day:
-                            tasks_by_day[g_day] = []
-                        tasks_by_day[g_day].append({
-                            'task_id': g_task_id,
-                            'title': g_title,
-                            'is_done': bool(g_is_done),
-                            'note': g_note,
-                            'due_at': g_due_at,
-                            'assignee_id': g_assignee_id,
-                            'assignee_name': self.db.get_user_name(g_assignee_id) if g_assignee_id else 'Chưa phân công',
-                        })
-            except Exception:
-                pass
-        except Exception as e:
-            print(f"Lỗi khi lấy task cá nhân: {e}")
-        return tasks_by_day
-
-    # [MỚI] Hàm để lấy task của nhóm
-    def _fetch_group_tasks_for_month(self):
-        tasks_by_day = {}
-        month_str = self.current_date.strftime('%Y-%m')
-        try:
-            # Prefer explicit current_group_id if set; otherwise find first group for user
-            group_id = self.current_group_id
-            if not group_id:
-                groups = self.db.get_groups_for_user(self.user_id)
-                if not groups:
-                    return {}
-                group_id = groups[0][0]
-
-            all_tasks = self.db.get_group_tasks_for_month(group_id, month_str)
-            # all_tasks: list of tuples (task_id, group_id, assignee_id, title, note, is_done, due_at)
-            for task_data in all_tasks:
-                task_id, g_group_id, assignee_id, title, note, is_done_int, due_at_str = task_data
-                if due_at_str:
-                    dt = self._parse_iso_datetime(due_at_str)
-                    if not dt:
-                        continue
-                    day = dt.day
-                    try:
-                        assignee_name = self.db.get_user_name(assignee_id) if assignee_id else ''
-                    except Exception:
-                        assignee_name = ''
-                    if day not in tasks_by_day:
-                        tasks_by_day[day] = []
-                    tasks_by_day[day].append({
-                        'task_id': task_id,
-                        'title': title,
-                        'is_done': bool(is_done_int),
-                        'note': note,
-                        'due_at': due_at_str,
-                        'assignee_id': assignee_id,
-                        'assignee_name': assignee_name,
-                    })
-        except Exception as e:
-            print(f"Lỗi khi lấy task nhóm: {e}")
-        return tasks_by_day
-    
-    def _get_user_name(self, user_id):
+        # Trường hợp 1: Công việc chưa được giao cho ai (user_id là None hoặc 0)
         if not user_id:
-            return "Chưa giao"
+            return None 
+        
+        # Kiểm tra xem tên người dùng đã có trong bộ đệm (cache) hay chưa để tránh truy vấn lại
         if user_id in self.user_names_cache:
             return self.user_names_cache[user_id]
-        name = self.db.get_user_name(user_id)
+        
+        # Nếu không có trong cache, thực hiện truy vấn cơ sở dữ liệu
+        name = self.db_manager.get_user_name(user_id)
+        
+        # Nếu tìm thấy tên trong CSDL
         if name:
-            self.user_names_cache[user_id] = name
+            self.user_names_cache[user_id] = name  # Lưu vào cache để sử dụng cho những lần sau
             return name
-        return "Không rõ"
-
-    # [THAY ĐỔI] Sửa lại để xử lý cấu trúc dữ liệu mới (có thêm assignee_name)
-    def _display_tasks(self, tasks):
-        # Dedupe per day to prevent duplicate renderings
-        seen = {}
-        for row in range(1, self.grid_layout.rowCount()):
-            for col in range(self.grid_layout.columnCount()):
-                item = self.grid_layout.itemAtPosition(row, col)
-                if item and isinstance(item.widget(), DayWidget):
-                    day_widget = item.widget()
-                    try:
-                        day_text = day_widget.date_label.text().strip()
-                        if not day_text:
-                            continue
-                        day_from_widget = int(day_text)
-                        if day_from_widget in tasks:
-                            # clear existing tasks before populating
-                            try:
-                                day_widget.clear_tasks()
-                            except Exception:
-                                pass
-                            if day_from_widget not in seen:
-                                seen[day_from_widget] = set()
-                            for task_data in tasks[day_from_widget]:
-                                # normalize
-                                t = None
-                                if isinstance(task_data, dict):
-                                    t = {
-                                        'task_id': task_data.get('task_id'),
-                                        'title': task_data.get('title'),
-                                        'is_done': task_data.get('is_done', False),
-                                        'note': task_data.get('note', ''),
-                                        'due_at': task_data.get('due_at'),
-                                        'assignee_name': task_data.get('assignee_name') or ''
-                                    }
-                                else:
-                                    try:
-                                        if len(task_data) >= 5:
-                                            t = {
-                                                'task_id': task_data[0],
-                                                'title': task_data[1],
-                                                'is_done': bool(task_data[2]),
-                                                'note': task_data[3],
-                                                'due_at': task_data[4],
-                                                'assignee_name': ''
-                                            }
-                                        else:
-                                            title, is_done_val, note_text = task_data
-                                            t = {'task_id': None, 'title': title, 'is_done': bool(is_done_val), 'note': note_text, 'due_at': None, 'assignee_name': ''}
-                                    except Exception:
-                                        continue
-
-                                title = t['title']
-                                is_done = t['is_done']
-                                note = t.get('note', '')
-                                due_at = t.get('due_at')
-                                assignee_name = t.get('assignee_name', '')
-                                key = ('id', t['task_id']) if t.get('task_id') else (title, due_at, assignee_name)
-
-                                if key in seen[day_from_widget]:
-                                    continue
-                                seen[day_from_widget].add(key)
-
-                                # Use visual TaskBadge inside calendar tiles; keep TaskWidget for detail dialogs
-                                color = '#66bb6a' if not assignee_name else '#5c6bc0'
-                                badge = TaskBadge(title, color=color, note=note, assignee_name=assignee_name, task_id=t.get('task_id'), is_group=bool(assignee_name), calendar_ref=self)
-                                # ensure badge checkbox matches DB state and apply done style (block signals while doing so)
-                                try:
-                                    badge.checkbox.blockSignals(True)
-                                    badge.checkbox.setChecked(bool(is_done))
-                                    badge.checkbox.setText('✓' if bool(is_done) else '')
-                                    badge.checkbox.blockSignals(False)
-                                except Exception:
-                                    pass
-                                if is_done:
-                                    badge.setStyleSheet("background: #bdbdbd; border-radius: 12px; padding: 4px;")
-                                    badge.label.setStyleSheet('color:#fff; text-decoration: line-through; font-size:11px;')
-                                day_widget.add_task(badge)
-                    except Exception as e:
-                        print(f"Lỗi khi hiển thị task: {e}")
-                        
-    # ... (các hàm còn lại như clear_calendar, setup_week_headers, prev_month, next_month giữ nguyên) ...
-    def clear_calendar(self):
-        while self.grid_layout.count():
-            item = self.grid_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-
-    def setup_week_headers(self):
-        days = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"]
-        for i, day in enumerate(days):
-            label = QLabel(day)
-            label.setObjectName("WeekDayLabel")
-            label.setAlignment(Qt.AlignCenter)
-            label.setStyleSheet('color: #02457a; font-weight:700; background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #bfe9ff, stop:1 #e6f7ff); padding:8px; border-radius:6px;')
-            self.grid_layout.addWidget(label, 0, i)
-
-    def prev_month(self):
-        self.current_date = self.current_date.replace(day=1) - timedelta(days=1)
-        self.populate_calendar()
-
-    def next_month(self):
-        days_in_month = calendar.monthrange(self.current_date.year, self.current_date.month)[1]
-        self.current_date = self.current_date.replace(day=days_in_month) + timedelta(days=1)
-        self.populate_calendar()
-
-    def add_task_to_db(self, date_obj, task_desc, note_text=""):
-        """
-        Nhận tín hiệu từ DayWidget để thêm công việc cá nhân vào database.
-        """
-        try:
-            # Chuyển đổi đối tượng datetime thành chuỗi 'YYYY-MM-DD HH:MM:SS'
-            try:
-                due_date_str = date_obj.strftime('%Y-%m-%d %H:%M:%S')
-            except Exception:
-                # fallback for date-only
-                due_date_str = date_obj.strftime('%Y-%m-%d')
-            # Use the richer API which supports estimate/priority; keep defaults
-            # add_task is a compatibility wrapper but call add_task_with_meta to be explicit
-            try:
-                self.db.add_task_with_meta(self.user_id, task_desc, note_text, 0, due_date_str, estimated_minutes=None, priority=2)
-            except Exception:
-                # fallback to wrapper
-                self.db.add_task(self.user_id, task_desc, note_text, 0, due_date_str)
             
-            # Sau khi thêm thành công, vẽ lại lịch để hiển thị công việc mới
-            self.populate_calendar()
-            print(f"Đã thêm công việc cá nhân thành công: '{task_desc}' vào ngày {due_date_str}")
+        # Trường hợp 2: Không tìm thấy người dùng trong CSDL với user_id đã cho
+        return None
 
-        except Exception as e:
-            print(f"Lỗi khi thêm công việc cá nhân vào database: {e}")
-
-    def open_day_detail(self, day: int):
-        """Open DayDetailDialog for the given day (uses self.current_date year/month)."""
-        try:
-            from MainMenu.components import DayDetailDialog
-            # build tasks_data for that day by scanning current grid
-            tasks_data = []
-            for row in range(1, self.grid_layout.rowCount()):
-                for col in range(self.grid_layout.columnCount()):
-                    item = self.grid_layout.itemAtPosition(row, col)
-                    if item and isinstance(item.widget(), DayWidget):
-                        day_widget = item.widget()
-                        if int(day_widget.date_label.text()) == day:
-                            # extract child widgets
-                            for i in range(day_widget.tasks_layout.count()):
-                                w = day_widget.tasks_layout.itemAt(i).widget()
-                                if not w:
-                                    continue
-                                # try to normalize
-                                if hasattr(w, 'task_id'):
-                                    title = w.text() if hasattr(w, 'text') else getattr(w, 'label', lambda: '')()
-                                    is_done = getattr(w, 'checkbox', None) and getattr(w.checkbox, 'isChecked', lambda: False)()
-                                    note = getattr(w, 'note', '')
-                                    assignee = getattr(w, 'assignee_name', None)
-                                    tasks_data.append({'title': title, 'is_done': is_done, 'note': note, 'assignee_name': assignee, 'task_id': getattr(w, 'task_id', None), 'is_group': getattr(w, 'is_group', False)})
-                            break
-            # open dialog
-            full_date = datetime(self.current_date.year, self.current_date.month, day)
-            dialog = DayDetailDialog(full_date, tasks_data, calendar_ref=self)
-            dialog.exec_()
-        except Exception as e:
-            print(f"Lỗi khi mở chi tiết ngày: {e}")
-
-    def add_group_task_to_db(self, date_obj, task_desc, assignee_id=None, note_text=""):
+    def clear_calendar_grid(self):
         """
-        Nhận tín hiệu từ DayWidget để thêm công việc nhóm vào database.
+        Xóa tất cả các widget (ô ngày, tiêu đề) khỏi lưới lịch.
+        """
+        while self.calendar_grid_layout.count():
+            layout_item = self.calendar_grid_layout.takeAt(0)
+            widget_to_remove = layout_item.widget()
+            if widget_to_remove is not None:
+                widget_to_remove.deleteLater()
+
+    def setup_weekday_headers(self):
+        """
+        Tạo và thêm các nhãn cho tiêu đề thứ trong tuần (Chủ Nhật, Thứ Hai, ...).
+        """
+        weekdays = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"]
+        for column_index, day_name in enumerate(weekdays):
+            header_label = QLabel(day_name)
+            header_label.setObjectName("WeekDayLabel")
+            header_label.setAlignment(Qt.AlignCenter)
+            header_label.setStyleSheet("""
+                color: #02457a; 
+                font-weight: 700; 
+                background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #bfe9ff, stop:1 #e6f7ff); 
+                padding: 8px; 
+                border-radius: 6px;
+            """)
+            self.calendar_grid_layout.addWidget(header_label, 0, column_index)
+
+    def populate_calendar_grid(self):
+        """
+        Vẽ lại toàn bộ lịch: điền ngày, công việc và cập nhật tiêu đề tháng.
+        """
+        self.clear_calendar_grid()  # Dọn dẹp lưới lịch cũ
+        self.setup_weekday_headers()  # Tạo lại tiêu đề các thứ trong tuần
+        
+        # Cập nhật nhãn hiển thị tháng/năm hiện tại
+        month_name = VIETNAMESE_MONTHS[self.current_display_date.month - 1]
+        self.month_year_label.setText(f"{month_name} {self.current_display_date.year}")
+        
+        # Lấy ma trận các ngày trong tháng từ thư viện calendar
+        month_matrix = calendar.monthcalendar(self.current_display_date.year, self.current_display_date.month)
+        
+        today = datetime.now()
+
+        # Lặp qua ma trận để tạo các DayWidget cho mỗi ngày
+        for row_index, week_list in enumerate(month_matrix):
+            for column_index, day_number in enumerate(week_list):
+                if day_number != 0:  # Chỉ tạo widget cho những ngày có trong tháng
+                    day_widget = DayWidget(
+                        date_text=str(day_number), 
+                        year=self.current_display_date.year, 
+                        month=self.current_display_date.month, 
+                        calendar_ref=self
+                    )
+                    
+                    # Đánh dấu ngày hôm nay
+                    is_today = (self.current_display_date.year == today.year and
+                                self.current_display_date.month == today.month and
+                                day_number == today.day)
+                    if is_today:
+                        day_widget.set_today_highlight(True)
+                        
+                    # Thêm DayWidget vào lưới tại đúng vị trí hàng và cột
+                    self.calendar_grid_layout.addWidget(day_widget, row_index + 1, column_index)
+        
+        # Lấy dữ liệu công việc dựa trên chế độ xem và hiển thị chúng
+        if self.view_mode == 'personal':
+            tasks = self._fetch_personal_tasks_for_month()
+        else:
+            tasks = self._fetch_group_tasks_for_month()
+
+        if tasks:
+            self._display_tasks_on_grid(tasks)
+
+    def _fetch_personal_tasks_for_month(self):
+        """
+        Truy vấn CSDL để lấy công việc cá nhân và công việc nhóm được giao cho người dùng trong tháng.
+        
+        Returns:
+            dict: Một dictionary với key là ngày (int) và value là danh sách các công việc.
+        """
+        tasks_by_day = {}
+        month_string = self.current_display_date.strftime('%Y-%m')
+        try:
+            # Lấy công việc cá nhân
+            personal_tasks = self.db_manager.get_tasks_for_user_month(self.current_user_id, month_string)
+            for task_tuple in personal_tasks:
+                task_id, title, is_done_int, note, due_at_str = task_tuple
+                if due_at_str:
+                    datetime_obj = datetime.fromisoformat(due_at_str)
+                    day = datetime_obj.day
+                    if day not in tasks_by_day:
+                        tasks_by_day[day] = []
+                    tasks_by_day[day].append({
+                        'task_id': task_id, 'title': title, 'is_done': bool(is_done_int),
+                        'note': note, 'due_at': due_at_str, 'assignee_name': None
+                    })
+
+            # Lấy công việc nhóm được giao cho người dùng này
+            assigned_group_tasks = self.db_manager.get_group_tasks_for_user_month(self.current_user_id, month_string)
+            for group_task_tuple in assigned_group_tasks:
+                g_task_id, _, assignee_id, g_title, g_note, g_is_done, g_due_at = group_task_tuple
+                if g_due_at:
+                    datetime_obj = datetime.fromisoformat(g_due_at)
+                    day = datetime_obj.day
+                    if day not in tasks_by_day:
+                        tasks_by_day[day] = []
+                    assignee_name = self._get_user_name_from_cache(assignee_id)
+                    tasks_by_day[day].append({
+                        'task_id': g_task_id, 'title': g_title, 'is_done': bool(g_is_done),
+                        'note': g_note, 'due_at': g_due_at, 'assignee_name': assignee_name
+                    })
+        except Exception as error:
+            print(f"Lỗi khi lấy công việc cá nhân: {error}")
+        return tasks_by_day
+
+    def _fetch_group_tasks_for_month(self):
+        """
+        Truy vấn CSDL để lấy tất cả công việc của nhóm hiện tại trong tháng.
+        
+        Returns:
+            dict: Một dictionary với key là ngày (int) và value là danh sách các công việc.
+        """
+        tasks_by_day = {}
+        if not self.current_group_id:
+            return tasks_by_day # Không có nhóm nào được chọn
+
+        month_string = self.current_display_date.strftime('%Y-%m')
+        try:
+            all_group_tasks = self.db_manager.get_group_tasks_for_month(self.current_group_id, month_string)
+            for task_tuple in all_group_tasks:
+                task_id, _, assignee_id, title, note, is_done_int, due_at_str = task_tuple
+                if due_at_str:
+                    datetime_obj = datetime.fromisoformat(due_at_str)
+                    day = datetime_obj.day
+                    if day not in tasks_by_day:
+                        tasks_by_day[day] = []
+                    
+                    assignee_name = self._get_user_name_from_cache(assignee_id)
+                    tasks_by_day[day].append({
+                        'task_id': task_id, 'title': title, 'is_done': bool(is_done_int),
+                        'note': note, 'due_at': due_at_str, 'assignee_name': assignee_name
+                    })
+        except Exception as error:
+            print(f"Lỗi khi lấy công việc nhóm: {error}")
+        return tasks_by_day
+
+    def _display_tasks_on_grid(self, tasks_by_day):
+        """
+        Hiển thị các công việc lên các ô ngày tương ứng trên lưới lịch.
+        
+        Args:
+            tasks_by_day (dict): Dictionary chứa các công việc đã được nhóm theo ngày.
+        """
+        # Lặp qua tất cả các widget trong lưới
+        for row in range(1, self.calendar_grid_layout.rowCount()):
+            for col in range(self.calendar_grid_layout.columnCount()):
+                layout_item = self.calendar_grid_layout.itemAtPosition(row, col)
+                if layout_item and isinstance(layout_item.widget(), DayWidget):
+                    day_widget = layout_item.widget()
+                    day_number = int(day_widget.date_label.text())
+                    
+                    # Nếu có công việc cho ngày này, thêm chúng vào DayWidget
+                    if day_number in tasks_by_day:
+                        day_widget.clear_tasks()  # Xóa các công việc cũ trước khi thêm mới
+                        for task_details in tasks_by_day[day_number]:
+                            is_group_task = task_details.get('assignee_name') is not None
+                            
+                            badge = TaskBadge(
+                                title=task_details['title'],
+                                color='#5c6bc0' if is_group_task else '#66bb6a',
+                                note=task_details.get('note', ''),
+                                assignee_name=task_details.get('assignee_name', ''),
+                                task_id=task_details.get('task_id'),
+                                is_group=is_group_task,
+                                calendar_ref=self
+                            )
+                            
+                            is_done = task_details.get('is_done', False)
+                            badge.checkbox.setChecked(is_done)
+                            
+                            day_widget.add_task(badge)
+
+    def go_to_previous_month(self):
+        """
+        Chuyển lịch sang tháng trước đó và tải lại dữ liệu.
+        """
+        self.current_display_date = self.current_display_date.replace(day=1) - timedelta(days=1)
+        self.populate_calendar_grid()
+
+    def go_to_next_month(self):
+        """
+        Chuyển lịch sang tháng kế tiếp và tải lại dữ liệu.
+        """
+        days_in_month = calendar.monthrange(self.current_display_date.year, self.current_display_date.month)[1]
+        self.current_display_date = self.current_display_date.replace(day=days_in_month) + timedelta(days=1)
+        self.populate_calendar_grid()
+        
+    def add_task_to_db(self, date_obj, task_title, note_text=""):
+        """
+        Thêm một công việc cá nhân mới vào cơ sở dữ liệu.
+        
+        Args:
+            date_obj (datetime): Ngày hết hạn của công việc.
+            task_title (str): Tiêu đề công việc.
+            note_text (str): Ghi chú cho công việc.
         """
         try:
-            try:
-                due_date_str = date_obj.strftime('%Y-%m-%d %H:%M:%S')
-            except Exception:
-                due_date_str = date_obj.strftime('%Y-%m-%d')
-            group_id = self._get_current_group_id()
-            if group_id:
-                # db.add_group_task(group_id, creator_id, title, note="", is_done=0, due_at=None, assignee_id=None)
-                self.db.add_group_task(group_id, self.user_id, task_desc, note_text, 0, due_date_str, assignee_id)
-                self.populate_calendar()
-                print(f"Đã giao công việc nhóm thành công: '{task_desc}' cho user_id {assignee_id}")
-            else:
-                print(f"Lỗi: Người dùng {self.user_id} không thuộc nhóm nào.")
+            due_date_str = date_obj.strftime('%Y-%m-%d %H:%M:%S')
+            self.db_manager.add_task(self.current_user_id, task_title, note_text, 0, due_date_str)
+            self.populate_calendar_grid()  # Tải lại lịch để hiển thị công việc mới
+            print(f"Đã thêm công việc cá nhân: '{task_title}'")
+        except Exception as error:
+            print(f"Lỗi khi thêm công việc cá nhân: {error}")
 
-        except Exception as e:
-            print(f"Lỗi khi thêm công việc nhóm vào database: {e}")
+    def add_group_task_to_db(self, date_obj, task_title, assignee_id=None, note_text=""):
+        """
+        Thêm một công việc nhóm mới vào cơ sở dữ liệu.
+        
+        Args:
+            date_obj (datetime): Ngày hết hạn của công việc.
+            task_title (str): Tiêu đề công việc.
+            assignee_id (int, optional): ID người được giao.
+            note_text (str): Ghi chú cho công việc.
+        """
+        if not self.current_group_id:
+            QMessageBox.warning(self, "Lỗi", "Không có nhóm nào được chọn để thêm công việc.")
+            return
+            
+        try:
+            due_date_str = date_obj.strftime('%Y-%m-%d %H:%M:%S')
+            self.db_manager.add_group_task(
+                group_id=self.current_group_id,
+                creator_id=self.current_user_id,
+                title=task_title,
+                note=note_text,
+                due_at=due_date_str,
+                assignee_id=assignee_id
+            )
+            self.populate_calendar_grid()
+            print(f"Đã thêm công việc nhóm: '{task_title}'")
+        except Exception as error:
+            print(f"Lỗi khi thêm công việc nhóm: {error}")
 
-    def delete_task(self, task_id: int, is_group: bool = False):
-        """Delete a task (personal or group) by id and refresh calendar."""
+    def delete_task(self, task_id, is_group):
+        """
+        Xóa một công việc (cá nhân hoặc nhóm) khỏi cơ sở dữ liệu.
+        
+        Args:
+            task_id (int): ID của công việc cần xóa.
+            is_group (bool): True nếu là công việc nhóm, False nếu là công việc cá nhân.
+        """
         try:
             if is_group:
-                self.db.delete_group_task(task_id)
+                self.db_manager.delete_group_task(task_id)
             else:
-                self.db.delete_task(task_id)
-            # refresh
-            self.populate_calendar()
-            print(f"Đã xóa task id={task_id} group={is_group}")
-        except Exception as e:
-            print(f"Lỗi khi xóa task: {e}")
-
-    def update_task_status(self, task_id: int, is_done: int, is_group: bool = False):
-        """Update the is_done status for a personal or group task.
-
-        This is called by TaskWidget when the user toggles the checkbox.
-        We persist the change. Caller may refresh specific day via refresh_day(day) to avoid full redraw.
+                self.db_manager.delete_task(task_id)
+            self.populate_calendar_grid()
+            print(f"Đã xóa công việc ID={task_id}, Nhóm={is_group}")
+        except Exception as error:
+            print(f"Lỗi khi xóa công việc: {error}")
+            
+    def update_task_status(self, task_id, is_done, is_group):
+        """
+        Cập nhật trạng thái hoàn thành của một công việc.
+        
+        Args:
+            task_id (int): ID của công việc.
+            is_done (int): Trạng thái mới (1 là hoàn thành, 0 là chưa).
+            is_group (bool): True nếu là công việc nhóm.
         """
         try:
-            if not task_id:
-                return
             if is_group:
-                # group tasks table
-                self.db.update_group_task_status(task_id, is_done)
+                self.db_manager.update_group_task_status(task_id, is_done)
             else:
-                self.db.update_task_status(task_id, is_done)
-            # Do not call populate_calendar here to avoid full redraw; caller should call refresh_day(day)
-            print(f"Cập nhật trạng thái task id={task_id} group={is_group} -> is_done={is_done}")
+                self.db_manager.update_task_status(task_id, is_done)
+            print(f"Đã cập nhật trạng thái cho công việc ID={task_id}")
             return True
-        except Exception as e:
-            print(f"Lỗi khi cập nhật trạng thái task: {e}")
+        except Exception as error:
+            print(f"Lỗi khi cập nhật trạng thái: {error}")
             return False
 
-    def refresh_day(self, day: int):
-        """Refresh widgets for a single day (day = 1..31) without re-rendering whole calendar.
-
-        This fetches tasks for the current month and updates only the targeted DayWidget.
+    def can_toggle_task(self, task_id, is_group):
         """
-        try:
-            # collect tasks for the month then pick the single day
-            if self.current_view_mode == 'personal':
-                tasks = self._fetch_personal_tasks_for_month()
-            else:
-                tasks = self._fetch_group_tasks_for_month()
-
-            tasks_for_day = {}
-            if isinstance(tasks, dict) and day in tasks:
-                tasks_for_day[day] = tasks[day]
-            else:
-                tasks_for_day[day] = []
-
-            # delegate to _display_tasks which handles clearing/adding for days present in dict
-            self._display_tasks(tasks_for_day)
-        except Exception as e:
-            print(f"Lỗi khi refresh day {day}: {e}")
-
-    def can_toggle_task(self, task_id: int, is_group: bool = False) -> tuple:
-        """Check whether the current user is allowed to toggle the given task.
-
-        Returns (allowed: bool, message: str).
-        For group tasks: group leader can toggle any task; other members can only toggle tasks assigned to themselves.
-        For personal tasks: only task owner can toggle.
+        Kiểm tra xem người dùng hiện tại có quyền thay đổi trạng thái của công việc không.
+        
+        Args:
+            task_id (int): ID của công việc.
+            is_group (bool): True nếu là công việc nhóm.
+            
+        Returns:
+            tuple: (bool, str) -> (có được phép hay không, thông báo lỗi).
         """
         try:
             if is_group:
-                data = self.db.get_group_task_by_id(task_id)
-                if not data:
+                task_details = self.db_manager.get_group_task_by_id(task_id)
+                if not task_details:
                     return False, "Không tìm thấy công việc nhóm."
-                # data tuple from DB: (task_id, group_id, assignee_id, title, note, is_done, created_at, due_at)
-                _, group_id, assignee_id, title, note, is_done, created_at, due_at = data
-                # If current group leader is the current user -> allow
-                if self.current_group_leader_id and self.user_id == self.current_group_leader_id:
+                
+                assignee_id = task_details[2] # Cột assignee_id
+                
+                # Trưởng nhóm có thể thay đổi mọi công việc.
+                # Thành viên chỉ có thể thay đổi công việc được giao cho chính họ.
+                if self.current_user_id == self.current_group_leader_id or self.current_user_id == assignee_id:
                     return True, ""
-                # else only assignee can toggle
-                if assignee_id and assignee_id == self.user_id:
-                    return True, ""
-                return False, "Bạn không có quyền thay đổi trạng thái công việc này."
+                else:
+                    return False, "Bạn không có quyền thay đổi công việc của người khác."
             else:
-                data = self.db.get_task_by_id(task_id)
-                if not data:
+                # Công việc cá nhân thì chỉ chủ sở hữu mới được thay đổi.
+                task_details = self.db_manager.get_task_by_id(task_id)
+                if not task_details:
                     return False, "Không tìm thấy công việc."
-                # data: (task_id, user_id, title, note, is_done, due_at)
-                _, owner_id, title, note, is_done, due_at = data
-                if owner_id == self.user_id:
+                    
+                owner_id = task_details[1] # Cột user_id
+                if owner_id == self.current_user_id:
                     return True, ""
-                return False, "Bạn chỉ có thể thay đổi công việc của chính mình."
-        except Exception as e:
-            print(f"Lỗi khi kiểm tra quyền toggle task: {e}")
-            return False, "Lỗi kiểm tra quyền." 
+                else:
+                    return False, "Đây là công việc cá nhân của người khác."
+        except Exception as error:
+            print(f"Lỗi khi kiểm tra quyền: {error}")
+            return False, "Lỗi hệ thống khi kiểm tra quyền."
