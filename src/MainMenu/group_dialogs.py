@@ -4,12 +4,6 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QLi
                              QPushButton, QInputDialog, QMessageBox, QLabel, QLineEdit)
 from PyQt5.QtCore import Qt
 
-def _get_database_path():
-    """Lấy đường dẫn tuyệt đối đến file database trong thư mục Data"""
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    src_dir = os.path.dirname(current_dir)
-    return os.path.join(src_dir, 'Data', 'todolist_database.db')
-
 class GroupSelectionDialog(QDialog):
     """Cửa sổ để chọn, tạo và xem các nhóm."""
     def __init__(self, user_id, parent=None):
@@ -43,8 +37,7 @@ class GroupSelectionDialog(QDialog):
         """Tải danh sách các nhóm mà người dùng là thành viên."""
         self.group_list_widget.clear()
         try:
-            db_path = _get_database_path()
-            db = Database(db_path)
+            db = Database()
             groups = db.get_groups_for_user(self.user_id)
             
             for group_id, group_name in groups:
@@ -59,8 +52,7 @@ class GroupSelectionDialog(QDialog):
         group_name, ok = QInputDialog.getText(self, "Tạo Nhóm Mới", "Nhập tên nhóm:")
         if ok and group_name:
             try:
-                db_path = _get_database_path()
-                db = Database(db_path)
+                db = Database()
                 gid = db.create_group(group_name, self.user_id)
                 if gid:
                     # ensure leader is in group_members
@@ -95,7 +87,7 @@ class MemberListDialog(QDialog):
         layout.addWidget(self.member_list)
 
         try:
-            db = Database(_get_database_path())
+            db = Database()
             members = db.get_group_members(group_id)
             for uid, name, email in members:
                 self.member_list.addItem(f"{name} ({email})")
@@ -125,7 +117,7 @@ class AddMemberDialog(QDialog):
             return 
 
         try:
-            db = Database(_get_database_path())
+            db = Database()
             user_result = db.get_user_by_email(email)
             if not user_result:
                 QMessageBox.warning(self, "Không tìm thấy", f"Không tìm thấy người dùng với email '{email}'.")

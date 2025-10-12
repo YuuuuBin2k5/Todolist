@@ -120,8 +120,7 @@ class ForgotPasswordDialog(QDialog):
             return
         # Kiểm tra email có tồn tại trong CSDL không (dùng Database helper)
         try:
-            db_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Data', 'todolist_database.db'))
-            db = Database(db_path)
+            db = Database()
             user = db.get_user_by_email(self.email)
             if not user:
                 QMessageBox.warning(self, "Lỗi", "Email không tồn tại trong hệ thống.")
@@ -159,9 +158,8 @@ class ForgotPasswordDialog(QDialog):
             
         # Cập nhật mật khẩu trong CSDL
         try:
-            db_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Data', 'todolist_database.db'))
-            db = Database(db_path)
-            db._execute_query("UPDATE users SET user_password = ? WHERE email = ?", (new_password, self.email), commit=True)
+            db = Database()
+            db.update_user_password_by_email(new_password, self.email)
             QMessageBox.information(self, "Thành công", "Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập.")
             self.accept() # Đóng dialog
         except Exception as e:
@@ -370,9 +368,8 @@ class LoginRegisterApp(QMainWindow):
         
         try:
             # Use Database helper for authentication
-            db_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Data', 'todolist_database.db'))
-            db = Database(db_path)
-            user = db._execute_query("SELECT user_id, user_name FROM users WHERE email = ? AND user_password = ?", (email, password), fetch="one")
+            db = Database()
+            user = db.get_login_user(email, password)
             if user:
                 user_id, user_name = user[0], user[1]
                 self._allow_close = True
@@ -392,10 +389,10 @@ class LoginRegisterApp(QMainWindow):
             QMessageBox.warning(self, "Lỗi", "Vui lòng điền đầy đủ tất cả các trường.")
             return
         try:
-            db_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Data', 'todolist_database.db'))
-            db = Database(db_path)
-            created = db.create_user(name, password, email)
-            if created:
+            db = Database()
+            created_id = db.create_user(name, password, email)
+            # create_user trả về user_id (int) khi thành công, hoặc None khi lỗi
+            if created_id is not None:
                 QMessageBox.information(self, "Thành công", "Đăng ký thành công! Vui lòng đăng nhập.")
                 self.show_sign_in()
             else:

@@ -17,10 +17,17 @@ VIETNAMESE_MONTHS = [
 ]
 
 class CalendarWidget(QWidget):
-    def __init__(self, user_id, db: Database, parent=None):
+    def __init__(self, user_id, db=None, parent=None):
+        # Signature: (user_id, db=None, parent=None)
+        # Accept a Database instance as the second (keyword) argument. If a
+        # Database isn't provided, create a local one. Avoid treating a
+        # Database object as the QWidget parent (was the source of the
+        # unexpected-type error during login where Database was passed
+        # positionally as the parent).
         super().__init__(parent)
         self.user_id = user_id
-        self.db = db
+        self.db = Database()
+            
         self.current_date = datetime.now()
         
         # [MỚI] Thêm trạng thái để biết đang xem lịch cá nhân hay nhóm

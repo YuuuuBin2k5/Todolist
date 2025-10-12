@@ -16,11 +16,6 @@ from PyQt5.QtGui import QIcon, QColor
 # --- Cấu hình ---
 ICON_DIR = os.path.join(os.path.dirname(__file__), '..', 'assets', 'icons')
 
-def _get_database_path():
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    src_dir = os.path.dirname(current_dir)
-    return os.path.join(src_dir, 'Data', 'todolist_database.db')
-
 # --- Bảng màu ---
 COLOR_BACKGROUND = "#F4F6F8"
 COLOR_PRIMARY = "#4A90E2"
@@ -176,11 +171,10 @@ class TaskItemWidget(QFrame):
 
 
 class DoNowView(QWidget):
-    def __init__(self, user_id=None, db: Optional[Database]=None, parent=None):
+    def __init__(self, user_id=None, db=None, parent=None):
         super().__init__(parent)
         self.user_id = user_id
-        # Use injected Database helper if provided, otherwise create one from file path
-        self.db = db or Database(_get_database_path())
+        self.db = Database()
         self.tasks, self.meta, self.history = [], {}, {}
         self.search_text, self.filter_status, self.page, self.page_size = "", "all", 1, 10
         
@@ -508,12 +502,3 @@ class DoNowView(QWidget):
                 except Exception:
                     continue
 
-    def _update_db(self, query, params):
-        # Backward-compat helper kept for legacy call sites inside this module.
-        # Try to map common queries to Database helper when possible; otherwise execute via Database._execute_query.
-        try:
-            # Use the internal Database._execute_query to run arbitrary queries
-            # Note: _execute_query returns None on success. We don't need the return value here.
-            self.db._execute_query(query, params, commit=True)
-        except Exception as e:
-            print(f"Lỗi DB (helper): {e}")

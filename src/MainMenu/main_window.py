@@ -21,18 +21,6 @@ from MainMenu.home_page import DoNowView
 from MainMenu.group_dialogs import GroupSelectionDialog, MemberListDialog, AddMemberDialog
 from config import *
 
-def _find_database_path():
-    """Hàm trợ giúp để tìm đường dẫn tuyệt đối đến file database."""
-    try:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        src_dir = os.path.dirname(current_dir)
-        db_path = os.path.join(src_dir, 'Data', 'todolist_database.db')
-        if not os.path.exists(db_path):
-            raise FileNotFoundError(f"Không tìm thấy file database tại: {db_path}")
-        return db_path
-    except Exception as e:
-        print(f"LỖI NGHIÊM TRỌNG: Không thể xác định đường dẫn database. {e}")
-        return None
 
 # Định nghĩa một chuỗi chứa mã CSS (QSS) để tạo kiểu cho toàn bộ ứng dụng
 # ĐÃ HỢP NHẤT TỪ CẢ HAI FILE
@@ -126,24 +114,12 @@ class MainWindow(QMainWindow):
         self.is_leader_of_current_group = False
         self._is_logging_out = False
 
-        # Sử dụng hàm trợ giúp để lấy đường dẫn CSDL một cách an toàn
-        self.db_path = _find_database_path()
-        if not self.db_path:
-            QMessageBox.critical(self, "Lỗi nghiêm trọng", "Không tìm thấy file database. Ứng dụng sẽ đóng.")
-            # Dùng QTimer để đóng cửa sổ sau khi hàm __init__ hoàn tất
-            from PyQt5.QtCore import QTimer
-            QTimer.singleShot(0, self.close)
-            return
-
         self.setWindowTitle("To-do List")
         self.setGeometry(100, 100, 1200, 800)
         self.setStyleSheet(STYLESHEET)
         self.setObjectName("MainWindow")
-        # Create Database helper early and reuse across widgets
-        try:
-            self.db = Database(self.db_path)
-        except Exception:
-            self.db = None
+
+        self.db = Database()
 
         self.initUI()
         self.side_panel.set_user_info(self.user_name, self.default_role)
