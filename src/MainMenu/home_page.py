@@ -1,783 +1,504 @@
 # -*- coding: utf-8 -*-
-"""
-    Trang chủ hiện đại và đẹp mắt cho ứng dụng To-do List
-    - Hiển thị thống kê công việc
-    - Danh sách công việc hôm nay và tuần này
-    - Lịch mini
-    - Công việc gần hết hạn
-    - Tiến độ hoàn thành
-"""
-
-import sqlite3
 import os
 from datetime import datetime, timedelta
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                             QLabel, QLineEdit, QCheckBox, QScrollArea, QFrame,
-                             QGridLayout, QProgressBar, QTextEdit, QCalendarWidget,
-                             QGroupBox, QSizePolicy, QSpacerItem)
-from PyQt5.QtCore import Qt, pyqtSignal, QDate, QTimer
-from PyQt5.QtGui import QFont, QPalette, QColor, QPixmap, QPainter, QBrush
+import time
+from typing import Optional
 
-def _get_database_path():
-    """Lấy đường dẫn tuyệt đối đến file database trong thư mục Data"""
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    src_dir = os.path.dirname(current_dir)
-    return os.path.join(src_dir, 'Data', 'todolist_database.db')
+from Managers.database_manager import Database
 
-class StatsCard(QFrame):
-    """Widget hiển thị thống kê dạng card"""
-    def __init__(self, title, value, color="#5c6bc0", parent=None):
-        super().__init__(parent)
-        self.setFrameStyle(QFrame.StyledPanel)
-        self.setFixedSize(150, 100)
-        self.setStyleSheet(f"""
-            QFrame {{
-                background-color: {color};
-                border-radius: 12px;
-                padding: 10px;
-                margin: 5px;
-            }}
-            QLabel {{
-                color: white;
-                font-weight: bold;
-                border: none;
-                background: transparent;
-            }}
-        """)
-        
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        
-        # Giá trị số
-        value_label = QLabel(str(value))
-        value_label.setAlignment(Qt.AlignCenter)
-        value_label.setStyleSheet("font-size: 24px; font-weight: bold;")
-        
-        # Tiêu đề
-        title_label = QLabel(title)
-        title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("font-size: 12px;")
-        title_label.setWordWrap(True)
-        
-        layout.addWidget(value_label)
-        layout.addWidget(title_label)
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
+                             QLabel, QLineEdit, QScrollArea, QFrame,
+                             QGridLayout, QGroupBox, QComboBox, QMessageBox,
+                             QDateTimeEdit, QGraphicsDropShadowEffect, QMenu, QAction)
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QDateTime
+from PyQt5.QtGui import QIcon, QColor
+
+# --- Cấu hình ---
+ICON_DIR = os.path.join(os.path.dirname(__file__), '..', 'assets', 'icons')
+
+# --- Bảng màu ---
+COLOR_BACKGROUND = "#F4F6F8"
+COLOR_PRIMARY = "#4A90E2"
+COLOR_SUCCESS = "#2ECC71"
+COLOR_DANGER = "#E74C3C"
+COLOR_TEXT_PRIMARY = "#2E3A4B"
+COLOR_TEXT_SECONDARY = "#8FA0B3"
+COLOR_BORDER = "#EAECEF"
+COLOR_WHITE = "#FFFFFF"
+COLOR_HOVER = "#5AA0F2"
+
+# [THÊM] Bảng màu cho Priority
+PRIORITY_COLORS = { 1: "#d1453b", 2: "#09eb32", 3: "#4073d6", 4: "#808080" }
+
+
+def _parse_iso_datetime_module(s: str):
+    """Module-level ISO datetime parser usable by widgets in this file."""
+    if not s:
+        return None
+    if isinstance(s, datetime):
+        return s
+    s = str(s)
+    try:
+        if s.endswith('Z'):
+            return datetime.fromisoformat(s.replace('Z', '+00:00'))
+        return datetime.fromisoformat(s)
+    except Exception:
+        pass
+    try:
+        s2 = s.replace('T', ' ').rstrip('Z')
+        try:
+            return datetime.strptime(s2, '%Y-%m-%d %H:%M:%S')
+        except Exception:
+            return datetime.strptime(s2, '%Y-%m-%d')
+    except Exception:
+        return None
 
 class TaskItemWidget(QFrame):
-    """Widget hiển thị một task với giao diện đẹp"""
-    task_updated = pyqtSignal()
-    
-    def __init__(self, task_id, title, is_done, due_date=None, note="", parent=None):
-        super().__init__(parent)
-        self.task_id = task_id
-        self.title = title
-        self.is_done = is_done
-        self.due_date = due_date
-        self.note = note
-        self.parent_widget = parent
-        
-        self.setFrameStyle(QFrame.StyledPanel)
-        self.setStyleSheet("""
-            QFrame {
-                background-color: #ffffff;
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
-                padding: 5px;
-                margin: 2px;
-            }
-            QFrame:hover {
-                border: 1px solid #5c6bc0;
-                background-color: #f8f9ff;
-            }
-            QCheckBox {
-                spacing: 8px;
-                font-size: 14px;
-            }
-            QCheckBox::indicator {
-                width: 18px;
-                height: 18px;
-                border-radius: 9px;
-                border: 2px solid #5c6bc0;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #5c6bc0;
-                border: 2px solid #5c6bc0;
-            }
-            QPushButton {
-                background-color: transparent;
-                border: none;
-                font-size: 12px;
-                color: #ef5350;
-                font-weight: bold;
-                padding: 5px;
-            }
-            QPushButton:hover {
-                background-color: #ffebee;
-                border-radius: 4px;
-            }
-        """)
-        
-        self.setupUI()
-        
-    def setupUI(self):
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(10)
-        
-        # Checkbox
-        self.checkbox = QCheckBox()
-        self.checkbox.setChecked(self.is_done)
-        self.checkbox.stateChanged.connect(self._handle_completion_change)
-        
-        # Nội dung task
-        content_layout = QVBoxLayout()
-        
-        # Title
-        self.title_label = QLabel(self.title)
-        self.title_label.setWordWrap(True)
-        title_font = self.title_label.font()
-        title_font.setPointSize(11)
-        title_font.setBold(not self.is_done)
-        self.title_label.setFont(title_font)
-        
-        if self.is_done:
-            self.title_label.setStyleSheet("text-decoration: line-through; color: #888;")
-        else:
-            self.title_label.setStyleSheet("color: #333;")
-            
-        content_layout.addWidget(self.title_label)
-        
-        # Due date và note (nếu có)
-        if self.due_date or self.note:
-            details_layout = QHBoxLayout()
-            details_layout.setSpacing(10)
-            
-            if self.due_date:
-                due_label = QLabel(f"📅 {self.due_date}")
-                due_label.setStyleSheet("color: #666; font-size: 10px;")
-                details_layout.addWidget(due_label)
-                
-            if self.note:
-                note_label = QLabel(f"📝 {self.note[:30]}...")
-                note_label.setStyleSheet("color: #666; font-size: 10px;")
-                details_layout.addWidget(note_label)
-                
-            details_layout.addStretch()
-            content_layout.addLayout(details_layout)
-        
-        layout.addWidget(self.checkbox)
-        layout.addLayout(content_layout, 1)
-        
-        # Nút xóa
-        delete_btn = QPushButton("✕")
-        delete_btn.setFixedSize(20, 20)
-        delete_btn.clicked.connect(self._handle_delete)
-        layout.addWidget(delete_btn)
-        
-    def _handle_completion_change(self, state):
-        self.is_done = self.checkbox.isChecked()
-        
-        if self.is_done:
-            self.title_label.setStyleSheet("text-decoration: line-through; color: #888;")
-            title_font = self.title_label.font()
-            title_font.setBold(False)
-            self.title_label.setFont(title_font)
-        else:
-            self.title_label.setStyleSheet("color: #333;")
-            title_font = self.title_label.font()
-            title_font.setBold(True)
-            self.title_label.setFont(title_font)
-        
-        self._update_task_in_db()
-        
-    def _update_task_in_db(self):
-        try:
-            conn = sqlite3.connect(_get_database_path())
-            cursor = conn.cursor()
-            cursor.execute("UPDATE tasks SET is_done = ? WHERE task_id = ?", 
-                           (self.is_done, self.task_id))
-            conn.commit()
-            conn.close()
-        except sqlite3.Error as e:
-            print(f"Lỗi khi cập nhật task: {e}")
-        finally:
-            self.task_updated.emit()
-            
-    def _handle_delete(self):
-        try:
-            conn = sqlite3.connect(_get_database_path())
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM tasks WHERE task_id = ?", (self.task_id,))
-            conn.commit()
-            conn.close()
-        except sqlite3.Error as e:
-            print(f"Lỗi khi xóa task: {e}")
-        finally:
-            self.task_updated.emit()
-            self.parent_widget.load_tasks()
+    task_toggled = pyqtSignal(str)
+    task_deleted = pyqtSignal(str)
+    task_started = pyqtSignal(str)
 
-class HomePageWidget(QWidget):
-    """Trang chủ chính với giao diện đẹp và đầy đủ tính năng"""
-    
-    def __init__(self, user_id=None, parent=None):
+    def __init__(self, task_data, meta_data, parent=None):
+        super().__init__(parent)
+        self.task_id = task_data['id']
+        self.task_data = task_data
+        self.meta_data = meta_data
+        self.setupUI()
+        self.apply_shadow()
+
+    def setupUI(self):
+        self.setObjectName("TaskItemWidget")
+        is_done = self.task_data['is_done']
+        
+        self.setStyleSheet(f"""
+            #TaskItemWidget {{
+                background-color: {COLOR_WHITE};
+                border: 1px solid {COLOR_BORDER};
+                border-radius: 8px; padding: 12px; margin: 4px 8px;
+            }}
+            #TaskItemWidget[done="true"] {{ background-color: #F8F9FA; }}
+            QLabel {{ background-color: transparent; border: none; }}
+        """)
+        self.setProperty("done", is_done)
+
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(10, 5, 10, 5)
+        
+        content_layout = QVBoxLayout()
+        title_label = QLabel(self.task_data['title'])
+        title_font_style = f"font-size: 15px; font-weight: bold; color: {COLOR_TEXT_PRIMARY};"
+        if is_done:
+            title_font_style = f"font-size: 15px; text-decoration: line-through; color: {COLOR_TEXT_SECONDARY};"
+        title_label.setStyleSheet(title_font_style)
+        content_layout.addWidget(title_label)
+        # Show note if present
+        note_text = self.task_data.get('note', '')
+        if note_text:
+            note_label = QLabel(note_text)
+            note_label.setStyleSheet(f"font-size:12px; color: {COLOR_TEXT_SECONDARY}; padding-top:4px;")
+            content_layout.addWidget(note_label)
+        
+        details_text = []
+        # [SỬA] Thêm hiển thị Priority
+        priority = self.task_data.get('priority', 4)
+        if priority < 4:
+            priority_color = PRIORITY_COLORS.get(priority, COLOR_TEXT_SECONDARY)
+            details_text.append(f"<b style='color:{priority_color};'>P{priority}</b>")
+
+        if self.task_data['due_at']:
+            try:
+                due_date = _parse_iso_datetime_module(self.task_data['due_at'])
+                if due_date:
+                    details_text.append(f"📅 {due_date.strftime('%d/%m %H:%M')}")
+                else:
+                    details_text.append(f"📅 {self.task_data['due_at']}")
+            except Exception:
+                details_text.append(f"📅 {self.task_data['due_at']}")
+        if self.task_data['estimated_minutes']:
+             details_text.append(f"⏱️ {self.task_data['estimated_minutes']}m")
+        if self.meta_data and 'actual' in self.meta_data:
+             details_text.append(f"✅ {self.meta_data['actual']}m")
+
+        if details_text:
+            details_label = QLabel("  •  ".join(details_text))
+            details_label.setStyleSheet(f"font-size: 11px; color: {COLOR_TEXT_SECONDARY}; padding-top: 4px;")
+            content_layout.addWidget(details_label)
+
+        action_layout = QHBoxLayout()
+        action_layout.setSpacing(5)
+        action_layout.setAlignment(Qt.AlignRight)
+
+        if not is_done:
+            start_btn = self._create_icon_button(os.path.join(ICON_DIR, 'play.svg'), "Start Task", COLOR_PRIMARY)
+            start_btn.clicked.connect(lambda: self.task_started.emit(self.task_id))
+            action_layout.addWidget(start_btn)
+            
+            complete_btn = self._create_icon_button(os.path.join(ICON_DIR, 'check-circle.svg'), "Mark as Complete", COLOR_SUCCESS)
+            complete_btn.clicked.connect(lambda: self.task_toggled.emit(self.task_id))
+            action_layout.addWidget(complete_btn)
+        else:
+            undo_btn = self._create_icon_button(os.path.join(ICON_DIR, 'rotate-ccw.svg'), "Mark as Pending", COLOR_TEXT_SECONDARY)
+            undo_btn.clicked.connect(lambda: self.task_toggled.emit(self.task_id))
+            action_layout.addWidget(undo_btn)
+            
+        delete_btn = self._create_icon_button(os.path.join(ICON_DIR, 'x-circle.svg'), "Delete Task", COLOR_DANGER)
+        delete_btn.clicked.connect(lambda: self.task_deleted.emit(self.task_id))
+        action_layout.addWidget(delete_btn)
+
+        main_layout.addLayout(content_layout)
+        main_layout.addStretch()
+        main_layout.addLayout(action_layout)
+
+    def _create_icon_button(self, icon_path, tooltip, color):
+        button = QPushButton()
+        if os.path.exists(icon_path):
+            button.setIcon(QIcon(icon_path))
+        button.setFixedSize(28, 28)
+        button.setToolTip(tooltip)
+        button.setStyleSheet(f"""
+            QPushButton {{ border-radius: 14px; background-color: transparent; padding: 4px; }}
+            QPushButton:hover {{ background-color: {color}; }}
+        """)
+        return button
+        
+    def apply_shadow(self):
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(25)
+        shadow.setXOffset(0)
+        shadow.setYOffset(5)
+        shadow.setColor(QColor(0, 0, 0, 25))
+        self.setGraphicsEffect(shadow)
+
+
+class DoNowView(QWidget):
+    def __init__(self, user_id=None, db=None, parent=None):
         super().__init__(parent)
         self.user_id = user_id
+        self.db = Database()
+        self.tasks, self.meta, self.history = [], {}, {}
+        self.search_text, self.filter_status, self.page, self.page_size = "", "all", 1, 10
+        
+        # [THÊM] State để lưu priority được chọn trong form
+        self.current_priority = 4
+        
         self.setupUI()
-        self.load_data()
-        
-        # Timer để cập nhật thời gian thực
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_time)
-        self.timer.start(1000)  # Cập nhật mỗi giây
-        
+        self.load_data_from_db()
+        self.notification_timer = QTimer(self)
+        self.notification_timer.timeout.connect(self._check_deadlines)
+        self.notification_timer.start(60 * 1000)
+
     def setupUI(self):
+        self.setStyleSheet(f"""
+            QWidget#DoNowView {{ background-color: {COLOR_BACKGROUND}; }}
+            QGroupBox {{ font-size: 14px; font-weight: bold; color: {COLOR_TEXT_PRIMARY}; border: 1px solid {COLOR_BORDER}; border-radius: 8px; margin-top: 10px; padding: 15px; }}
+            QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top left; left: 15px; padding: 0 5px; background-color: {COLOR_BACKGROUND}; }}
+            QLineEdit, QDateTimeEdit, QComboBox {{ border: 1px solid {COLOR_BORDER}; border-radius: 6px; padding: 10px; background-color: {COLOR_WHITE}; font-size: 13px; color: {COLOR_TEXT_PRIMARY}; }}
+            QLineEdit:focus, QDateTimeEdit:focus, QComboBox:focus {{ border: 1px solid {COLOR_PRIMARY}; }}
+            QPushButton#MainCTA {{ background-color: {COLOR_PRIMARY}; color: {COLOR_WHITE}; font-weight: bold; font-size: 13px; border: none; border-radius: 6px; padding: 10px; }}
+            QPushButton#MainCTA:hover {{ background-color: {COLOR_HOVER}; }}
+            QPushButton#PaginationButton {{ background-color: {COLOR_WHITE}; color: {COLOR_TEXT_PRIMARY}; border: 1px solid {COLOR_BORDER}; border-radius: 6px; padding: 8px 16px; }}
+            QPushButton#PaginationButton:disabled {{ background-color: #F8F9FA; color: {COLOR_TEXT_SECONDARY}; }}
+            QPushButton#PaginationButton:hover {{ border-color: {COLOR_PRIMARY}; }}
+            QScrollArea {{ border: none; background-color: transparent; }}
+            #TasksContainer {{ background-color: transparent; }}
+        """)
+        self.setObjectName("DoNowView")
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setContentsMargins(25, 20, 25, 20)
         main_layout.setSpacing(20)
+        header = QLabel("My Tasks")
+        header.setStyleSheet(f"font-size: 28px; font-weight: bold; color: {COLOR_TEXT_PRIMARY};")
+        header.setAlignment(Qt.AlignLeft)
+        main_layout.addWidget(header)
+        main_layout.addWidget(self._create_form_group())
+        main_layout.addWidget(self._create_filter_bar())
+        main_layout.addWidget(self._create_task_list_group(), 1)
+        main_layout.addLayout(self._create_pagination_controls())
+
+    def _create_form_group(self):
+        group = QGroupBox("✨ Add New Task")
+        layout = QGridLayout(group)
+        self.title_input = QLineEdit(placeholderText="e.g., Finish project report")
+        self.due_date_input = QDateTimeEdit(calendarPopup=True)
+        self.due_date_input.setDateTime(QDateTime.currentDateTime())
+        self.estimated_input = QLineEdit(placeholderText="Time in minutes")
+        # [THÊM] Ghi chú cho task
+        self.note_input = QLineEdit(placeholderText="Optional note")
         
-        # Header với chào mừng và thời gian
-        self.create_header(main_layout)
+        # [THÊM] Nút chọn Priority
+        self.priority_button = QPushButton()
+        self.priority_button.setToolTip("Set Priority")
+        self._set_priority(4) # Set icon mặc định
+        self.priority_button.clicked.connect(self._show_priority_menu)
+
+        add_btn = QPushButton("Add Task")
+        add_btn.setObjectName("MainCTA")
         
-        # Thống kê nhanh
-        self.create_stats_section(main_layout)
-        
-        # Layout chính với 2 cột
-        content_layout = QHBoxLayout()
-        content_layout.setSpacing(20)
-        
-        # Cột trái: Tasks và Quick Add
-        left_column = QVBoxLayout()
-        self.create_quick_add_section(left_column)
-        self.create_today_tasks_section(left_column)
-        content_layout.addLayout(left_column, 2)
-        
-        # Cột phải: Calendar mini và Upcoming tasks
-        right_column = QVBoxLayout()
-        self.create_mini_calendar_section(right_column)
-        self.create_upcoming_tasks_section(right_column)
-        content_layout.addLayout(right_column, 1)
-        
-        main_layout.addLayout(content_layout)
-        
-    def create_header(self, parent_layout):
-        header_frame = QFrame()
-        header_frame.setStyleSheet("""
-            QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                           stop:0 #667eea, stop:1 #764ba2);
-                border-radius: 15px;
-                padding: 20px;
-            }
-            QLabel {
-                color: white;
-                background: transparent;
-                border: none;
-            }
-        """)
-        
-        header_layout = QVBoxLayout(header_frame)
-        
-        # Chào mừng
-        self.welcome_label = QLabel("Chào mừng trở lại! 👋")
-        welcome_font = QFont()
-        welcome_font.setFamily("Segoe UI, Arial, sans-serif")  # Font hỗ trợ tiếng Việt tốt
-        welcome_font.setPointSize(18)
-        welcome_font.setBold(True)
-        self.welcome_label.setFont(welcome_font)
-        
-        # Thời gian hiện tại
-        self.time_label = QLabel()
-        time_font = QFont()
-        time_font.setFamily("Segoe UI, Arial, sans-serif")  # Font hỗ trợ tiếng Việt tốt
-        time_font.setPointSize(12)
-        self.time_label.setFont(time_font)
-        self.update_time()
-        
-        header_layout.addWidget(self.welcome_label)
-        header_layout.addWidget(self.time_label)
-        
-        parent_layout.addWidget(header_frame)
-        
-    def create_stats_section(self, parent_layout):
-        stats_frame = QGroupBox("📊 Thống kê")
-        stats_frame.setStyleSheet("""
-            QGroupBox {
-                font-family: 'Segoe UI', 'Arial', sans-serif;
-                font-weight: bold;
-                font-size: 14px;
-                color: #333;
-                border: 2px solid #e0e0e0;
-                border-radius: 10px;
-                margin-top: 10px;
-                padding: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-            }
-        """)
-        
-        stats_layout = QHBoxLayout(stats_frame)
-        
-        # Các thẻ thống kê sẽ được tạo động trong load_data()
-        self.stats_layout = stats_layout
-        
-        parent_layout.addWidget(stats_frame)
-        
-    def create_quick_add_section(self, parent_layout):
-        add_frame = QGroupBox("➕ Thêm công việc mới")
-        add_frame.setStyleSheet("""
-            QGroupBox {
-                font-family: 'Segoe UI', 'Arial', sans-serif;
-                font-weight: bold;
-                font-size: 14px;
-                color: #333;
-                border: 2px solid #e0e0e0;
-                border-radius: 10px;
-                margin-top: 10px;
-                padding: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-            }
-        """)
-        
-        add_layout = QVBoxLayout(add_frame)
-        
-        # Input và nút thêm
-        input_layout = QHBoxLayout()
-        
-        self.task_input = QLineEdit()
-        self.task_input.setPlaceholderText("Nhập công việc mới...")
-        self.task_input.setStyleSheet("""
-            QLineEdit {
-                font-family: 'Segoe UI', 'Arial', sans-serif;
-                padding: 12px;
-                border: 2px solid #e0e0e0;
-                border-radius: 8px;
-                font-size: 14px;
-                background-color: white;
-            }
-            QLineEdit:focus {
-                border: 2px solid #5c6bc0;
-                background-color: #f8f9ff;
-            }
-        """)
-        self.task_input.returnPressed.connect(self._add_task)
-        
-        add_btn = QPushButton("Thêm")
-        add_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #5c6bc0;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 12px 20px;
-                font-weight: bold;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: #4a5aa8;
-            }
-            QPushButton:pressed {
-                background-color: #3f4f96;
-            }
-        """)
-        add_btn.clicked.connect(self._add_task)
-        
-        input_layout.addWidget(self.task_input, 1)
-        input_layout.addWidget(add_btn)
-        
-        add_layout.addLayout(input_layout)
-        parent_layout.addWidget(add_frame)
-        
-    def create_today_tasks_section(self, parent_layout):
-        tasks_frame = QGroupBox("📋 Công việc hôm nay")
-        tasks_frame.setStyleSheet("""
-            QGroupBox {
-                font-family: 'Segoe UI', 'Arial', sans-serif;
-                font-weight: bold;
-                font-size: 14px;
-                color: #333;
-                border: 2px solid #e0e0e0;
-                border-radius: 10px;
-                margin-top: 10px;
-                padding: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-            }
-        """)
-        
-        tasks_layout = QVBoxLayout(tasks_frame)
-        
-        # Scroll area cho danh sách tasks
+        layout.addWidget(self.title_input, 0, 0, 1, 2)
+        layout.addWidget(self.due_date_input, 1, 0)
+        layout.addWidget(self.estimated_input, 1, 1)
+        layout.addWidget(self.priority_button, 1, 2) # Thêm nút priority vào layout
+        layout.addWidget(add_btn, 0, 2, 1, 1) # Chỉ chiếm 1 hàng
+        layout.addWidget(self.note_input, 2, 0, 1, 3)
+
+        add_btn.clicked.connect(self._handle_add_task)
+        self.title_input.returnPressed.connect(self._handle_add_task)
+        return group
+
+    # [THÊM] Hàm hiển thị menu chọn Priority
+    def _show_priority_menu(self):
+        menu = QMenu(self)
+        icons = {
+            1: 'flag-red.svg', 2: 'flag-green.svg', 
+            3: 'flag-blue.svg', 4: 'flag-grey.svg'
+        }
+        for p_val in range(1, 5):
+            icon_path = os.path.join(ICON_DIR, icons[p_val])
+            action = QAction(QIcon(icon_path), f"Priority {p_val}", self) if os.path.exists(icon_path) else QAction(f"Priority {p_val}", self)
+            action.triggered.connect(lambda chk, prio=p_val: self._set_priority(prio))
+            menu.addAction(action)
+        menu.exec_(self.priority_button.mapToGlobal(self.priority_button.rect().bottomLeft()))
+
+    # [THÊM] Hàm cập nhật state và icon cho nút priority
+    def _set_priority(self, priority):
+        self.current_priority = priority
+        icon_map = {1: 'flag-red.svg', 2: 'flag-green.svg', 3: 'flag-blue.svg', 4: 'flag-grey.svg'}
+        icon_path = os.path.join(ICON_DIR, icon_map.get(priority, 'flag-grey.svg'))
+        if os.path.exists(icon_path):
+            self.priority_button.setIcon(QIcon(icon_path))
+
+    def _create_filter_bar(self):
+        # ... (Hàm này giữ nguyên)
+        container = QFrame()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0,0,0,0)
+        self.search_input = QLineEdit(placeholderText="Search tasks...")
+        self.status_filter_combo = QComboBox()
+        self.status_filter_combo.addItems(["All Status", "Pending", "Done"])
+        layout.addWidget(self.search_input, 1)
+        layout.addWidget(self.status_filter_combo)
+        self.search_input.textChanged.connect(self._handle_search_change)
+        self.status_filter_combo.currentIndexChanged.connect(self._handle_filter_change)
+        return container
+
+    def _create_task_list_group(self):
+        # ... (Hàm này giữ nguyên)
+        group = QGroupBox("📌 Task List")
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(0, 5, 0, 5)
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: none;
-                background-color: #f8f9fa;
-                border-radius: 8px;
-            }
-            QScrollBar:vertical {
-                border: none;
-                background: #f0f0f0;
-                width: 8px;
-                border-radius: 4px;
-            }
-            QScrollBar::handle:vertical {
-                background: #c0c0c0;
-                border-radius: 4px;
-                min-height: 20px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: #a0a0a0;
-            }
-        """)
-        
         self.tasks_container = QWidget()
+        self.tasks_container.setObjectName("TasksContainer")
         self.tasks_layout = QVBoxLayout(self.tasks_container)
-        self.tasks_layout.setContentsMargins(5, 5, 5, 5)
         self.tasks_layout.setAlignment(Qt.AlignTop)
-        
+        self.tasks_layout.setSpacing(5)
         scroll_area.setWidget(self.tasks_container)
-        tasks_layout.addWidget(scroll_area)
-        
-        parent_layout.addWidget(tasks_frame)
-        
-    def create_mini_calendar_section(self, parent_layout):
-        calendar_frame = QGroupBox("🗓️ Lịch")
-        calendar_frame.setStyleSheet("""
-            QGroupBox {
-                font-family: 'Segoe UI', 'Arial', sans-serif;
-                font-weight: bold;
-                font-size: 14px;
-                color: #333;
-                border: 2px solid #e0e0e0;
-                border-radius: 10px;
-                margin-top: 10px;
-                padding: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-            }
-        """)
-        
-        calendar_layout = QVBoxLayout(calendar_frame)
-        
-        self.mini_calendar = QCalendarWidget()
-        self.mini_calendar.setStyleSheet("""
-            QCalendarWidget {
-                background-color: white;
-                border-radius: 8px;
-            }
-            QCalendarWidget QToolButton {
-                background-color: #5c6bc0;
-                color: white;
-                border: none;
-                padding: 5px;
-            }
-        """)
-        
-        calendar_layout.addWidget(self.mini_calendar)
-        parent_layout.addWidget(calendar_frame)
-        
-    def create_upcoming_tasks_section(self, parent_layout):
-        upcoming_frame = QGroupBox("⏰ Sắp đến hạn")
-        upcoming_frame.setStyleSheet("""
-            QGroupBox {
-                font-family: 'Segoe UI', 'Arial', sans-serif;
-                font-weight: bold;
-                font-size: 14px;
-                color: #333;
-                border: 2px solid #e0e0e0;
-                border-radius: 10px;
-                margin-top: 10px;
-                padding: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-            }
-        """)
-        
-        upcoming_layout = QVBoxLayout(upcoming_frame)
-        
-        # Container cho upcoming tasks
-        self.upcoming_container = QWidget()
-        self.upcoming_layout = QVBoxLayout(self.upcoming_container)
-        self.upcoming_layout.setAlignment(Qt.AlignTop)
-        
-        upcoming_scroll = QScrollArea()
-        upcoming_scroll.setWidgetResizable(True)
-        upcoming_scroll.setWidget(self.upcoming_container)
-        upcoming_scroll.setStyleSheet("""
-            QScrollArea {
-                border: none;
-                background-color: #f8f9fa;
-                border-radius: 8px;
-            }
-        """)
-        
-        upcoming_layout.addWidget(upcoming_scroll)
-        parent_layout.addWidget(upcoming_frame)
-        
-    def update_time(self):
-        current_time = datetime.now()
-        time_str = current_time.strftime("%H:%M:%S")
-        
-        # Tên ngày trong tuần bằng tiếng Việt (sử dụng weekday())
-        day_names = [
-            'Thứ Hai',    # 0 - Monday
-            'Thứ Ba',     # 1 - Tuesday  
-            'Thứ Tư',     # 2 - Wednesday
-            'Thứ Nam',    # 3 - Thursday
-            'Thứ Sáu',    # 4 - Friday
-            'Thứ Bảy',    # 5 - Saturday
-            'Chủ Nhật'    # 6 - Sunday
-        ]
-        
-        day_name = day_names[current_time.weekday()]
-        date_str = f"{day_name}, {current_time.strftime('%d/%m/%Y')}"
-            
-        self.time_label.setText(f"{date_str} • {time_str}")
-        
-    def load_data(self):
-        """Tải và hiển thị tất cả dữ liệu"""
-        self.load_stats()
-        self.load_tasks()
-        self.load_upcoming_tasks()
-        
-    def load_stats(self):
-        """Tải thống kê và hiển thị"""
+        layout.addWidget(scroll_area)
+        return group
+
+    def _create_pagination_controls(self):
+        # ... (Hàm này giữ nguyên)
+        layout = QHBoxLayout()
+        self.prev_btn = QPushButton("Previous")
+        self.next_btn = QPushButton("Next")
+        self.prev_btn.setObjectName("PaginationButton")
+        self.next_btn.setObjectName("PaginationButton")
+        self.page_label = QLabel(f"Page {self.page}")
+        self.page_label.setStyleSheet(f"color: {COLOR_TEXT_SECONDARY}; font-weight: bold;")
+        self.page_label.setAlignment(Qt.AlignCenter)
+        layout.addStretch()
+        layout.addWidget(self.prev_btn)
+        layout.addWidget(self.page_label)
+        layout.addWidget(self.next_btn)
+        layout.addStretch()
+        self.prev_btn.clicked.connect(lambda: self._handle_page_change(-1))
+        self.next_btn.clicked.connect(lambda: self._handle_page_change(1))
+        return layout
+
+    def load_data_from_db(self):
         try:
-            conn = sqlite3.connect(_get_database_path())
-            cursor = conn.cursor()
-            
-            # Tổng số tasks
-            cursor.execute("SELECT COUNT(*) FROM tasks WHERE user_id = ?", (self.user_id,))
-            total_tasks = cursor.fetchone()[0]
-            
-            # Tasks hoàn thành
-            cursor.execute("SELECT COUNT(*) FROM tasks WHERE user_id = ? AND is_done = 1", (self.user_id,))
-            completed_tasks = cursor.fetchone()[0]
-            
-            # Tasks hôm nay
-            today = datetime.now().date().strftime("%Y-%m-%d")
-            cursor.execute("SELECT COUNT(*) FROM tasks WHERE user_id = ? AND DATE(created_at) = ?", (self.user_id, today))
-            today_tasks = cursor.fetchone()[0]
-            
-            # Tasks chưa hoàn thành
-            pending_tasks = total_tasks - completed_tasks
-            
-            conn.close()
-            
-            # Xóa các stats cũ
-            for i in reversed(range(self.stats_layout.count())): 
-                item = self.stats_layout.itemAt(i)
-                if item and item.widget():
-                    item.widget().setParent(None)
-            
-            # Thêm các thẻ thống kê mới
-            stats_data = [
-                ("Tổng công việc", total_tasks, "#5c6bc0"),
-                ("Hoàn thành", completed_tasks, "#4caf50"),
-                ("Đang thực hiện", pending_tasks, "#ff9800"),
-                ("Hôm nay", today_tasks, "#9c27b0")
-            ]
-            
-            for title, value, color in stats_data:
-                card = StatsCard(title, value, color)
-                self.stats_layout.addWidget(card)
-                
-            # Thêm spacer để căn trái
-            self.stats_layout.addStretch()
-            
-        except sqlite3.Error as e:
-            print(f"Lỗi khi tải thống kê: {e}")
-            
-    def load_tasks(self):
-        """Tải công việc hôm nay"""
-        # Xóa tasks cũ
-        for i in reversed(range(self.tasks_layout.count())): 
-            item = self.tasks_layout.itemAt(i)
-            if item and item.widget():
-                item.widget().setParent(None)
-            
-        try:
-            conn = sqlite3.connect(_get_database_path())
-            cursor = conn.cursor()
-            
-            # Lấy tasks (ưu tiên chưa hoàn thành trước)
-            cursor.execute("""
-                SELECT task_id, title, is_done, due_at, note 
-                FROM tasks 
-                WHERE user_id = ? 
-                ORDER BY is_done ASC, created_at DESC 
-                LIMIT 20
-            """, (self.user_id,))
-            
-            tasks = cursor.fetchall()
-            conn.close()
-            
-            if not tasks:
-                no_tasks_label = QLabel("Không có công việc nào. Hãy thêm công việc mới! 😊")
-                no_tasks_label.setAlignment(Qt.AlignCenter)
-                no_tasks_label.setStyleSheet("""
-                    font-family: 'Segoe UI', 'Arial', sans-serif;
-                    color: #888;
-                    font-size: 14px;
-                    padding: 20px;
-                    font-style: italic;
-                """)
-                self.tasks_layout.addWidget(no_tasks_label)
-            else:
-                for task_id, title, is_done, due_at, note in tasks:
-                    # Format due_at nếu có
-                    due_date_str = None
-                    if due_at:
-                        try:
-                            due_date = datetime.fromisoformat(due_at.replace('Z', '+00:00'))
-                            due_date_str = due_date.strftime("%d/%m")
-                        except:
-                            pass
-                    
-                    task_widget = TaskItemWidget(
-                        task_id, title, bool(is_done), due_date_str, note or "", self
-                    )
-                    task_widget.task_updated.connect(self.load_data)
-                    self.tasks_layout.addWidget(task_widget)
-                    
-        except sqlite3.Error as e:
+            rows = self.db.get_tasks_for_user(self.user_id)
+            # Database.get_tasks_for_user returns rows like:
+            # (task_id, title, is_done, due_at, estimate_minutes, priority, note)
+            self.tasks = []
+            for r in rows:
+                task_id = str(r[0])
+                title = r[1]
+                is_done = bool(r[2])
+                due_at = r[3]
+                estimated = r[4]
+                priority = r[5] if len(r) > 5 else 4
+                note = r[6] if len(r) > 6 else ""
+                self.tasks.append({
+                    "id": task_id,
+                    "title": title,
+                    "is_done": is_done,
+                    "due_at": due_at,
+                    "estimated_minutes": estimated,
+                    "priority": priority,
+                    "note": note,
+                })
+        except Exception as e:
             print(f"Lỗi khi tải tasks: {e}")
-            
-    def load_upcoming_tasks(self):
-        """Tải các task sắp đến hạn"""
-        # Xóa upcoming tasks cũ
-        for i in reversed(range(self.upcoming_layout.count())): 
-            item = self.upcoming_layout.itemAt(i)
-            if item and item.widget():
-                item.widget().setParent(None)
-            
+        self.render_tasks()
+
+    # Compatibility wrapper: older callers call `load_data()`
+    def load_data(self):
+        """Backward-compatible alias used by MainWindow: load and render tasks."""
+        self.load_data_from_db()
+
+    def _parse_iso_datetime(self, s: str):
+        if not s:
+            return None
+        if isinstance(s, datetime):
+            return s
+        s = str(s)
         try:
-            conn = sqlite3.connect(_get_database_path())
-            cursor = conn.cursor()
-            
-            # Lấy tasks có due_at trong 7 ngày tới
-            next_week = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
-            cursor.execute("""
-                SELECT task_id, title, due_at 
-                FROM tasks 
-                WHERE user_id = ? AND is_done = 0 AND due_at IS NOT NULL 
-                AND DATE(due_at) <= ? 
-                ORDER BY due_at ASC 
-                LIMIT 10
-            """, (self.user_id, next_week))
-            
-            upcoming_tasks = cursor.fetchall()
-            conn.close()
-            
-            if not upcoming_tasks:
-                no_upcoming_label = QLabel("Không có công việc sắp đến hạn 🎉")
-                no_upcoming_label.setAlignment(Qt.AlignCenter)
-                no_upcoming_label.setStyleSheet("""
-                    font-family: 'Segoe UI', 'Arial', sans-serif;
-                    color: #888;
-                    font-size: 12px;
-                    padding: 15px;
-                    font-style: italic;
-                """)
-                self.upcoming_layout.addWidget(no_upcoming_label)
-            else:
-                for task_id, title, due_at in upcoming_tasks:
-                    upcoming_item = self._create_upcoming_item(title, due_at)
-                    self.upcoming_layout.addWidget(upcoming_item)
-                    
-        except sqlite3.Error as e:
-            print(f"Lỗi khi tải upcoming tasks: {e}")
-            
-    def _create_upcoming_item(self, title, due_at):
-        """Tạo item cho upcoming task"""
-        item_frame = QFrame()
-        item_frame.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border: 1px solid #e0e0e0;
-                border-radius: 6px;
-                padding: 8px;
-                margin: 2px;
-            }
-            QLabel {
-                background: transparent;
-                border: none;
-            }
-        """)
-        
-        layout = QVBoxLayout(item_frame)
-        layout.setContentsMargins(8, 6, 8, 6)
-        
-        # Title
-        title_label = QLabel(title)
-        title_label.setWordWrap(True)
-        title_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #333;")
-        
-        # Due date
+            if s.endswith('Z'):
+                return datetime.fromisoformat(s.replace('Z', '+00:00'))
+            return datetime.fromisoformat(s)
+        except Exception:
+            pass
         try:
-            due_date = datetime.fromisoformat(due_at.replace('Z', '+00:00'))
-            due_str = due_date.strftime("%d/%m - %H:%M")
-            
-            # Tính số ngày còn lại
-            days_left = (due_date.date() - datetime.now().date()).days
-            if days_left == 0:
-                due_str += " (Hôm nay)"
-                color = "#f44336"
-            elif days_left == 1:
-                due_str += " (Ngày mai)"
-                color = "#ff9800"
-            else:
-                due_str += f" ({days_left} ngày)"
-                color = "#666"
-                
-        except:
-            due_str = due_at
-            color = "#666"
-            
-        due_label = QLabel(due_str)
-        due_label.setStyleSheet(f"font-size: 10px; color: {color};")
+            s2 = s.replace('T', ' ').rstrip('Z')
+            try:
+                return datetime.strptime(s2, '%Y-%m-%d %H:%M:%S')
+            except Exception:
+                return datetime.strptime(s2, '%Y-%m-%d')
+        except Exception:
+            return None
+
+    def get_visible_tasks(self):
+        # [SỬA] Sắp xếp theo priority trước
+        def sort_key(task):
+            # Sắp xếp theo is_done (chưa xong trước), sau đó là priority (1 là cao nhất), sau đó là điểm urgency
+            return (task['is_done'], task.get('priority', 4), -calculate_urgency_score(task))
+
+        now = time.time() * 1000
+        def calculate_urgency_score(task):
+            deadline_ms = float('-inf') # Dùng -inf để task không có deadline bị đẩy xuống dưới
+            if task['due_at']:
+                try:
+                    dt_obj = _parse_iso_datetime_module(task['due_at'])
+                    if dt_obj is None:
+                        raise ValueError('unparsed')
+                    deadline_ms = dt_obj.timestamp() * 1000
+                except (ValueError, TypeError): pass
+            urgency_hours = max(1, (deadline_ms - now) / (3600000))
+            history_score = self.history.get(task['id'], 0) * 10
+            return (1 / urgency_hours) * 100 + history_score
         
-        layout.addWidget(title_label)
-        layout.addWidget(due_label)
+        sorted_tasks = sorted(self.tasks, key=sort_key)
         
-        return item_frame
+        def filter_func(task):
+            match_status = (self.filter_status == "all" or (self.filter_status == "pending" and not task['is_done']) or (self.filter_status == "done" and task['is_done']))
+            match_search = self.search_text.lower() in task['title'].lower()
+            return match_status and match_search
         
-    def _add_task(self):
-        """Thêm task mới"""
-        title = self.task_input.text().strip()
-        if not title:
-            return
-            
+        filtered_tasks = list(filter(filter_func, sorted_tasks))
+        start = (self.page - 1) * self.page_size
+        return filtered_tasks, filtered_tasks[start:start + self.page_size]
+
+    def render_tasks(self):
+        # ... (Hàm này giữ nguyên logic, chỉ gọi get_visible_tasks đã được sửa)
+        while self.tasks_layout.count():
+            child = self.tasks_layout.takeAt(0)
+            if child.widget(): child.widget().deleteLater()
+        all_filtered, visible_tasks = self.get_visible_tasks()
+        if not visible_tasks:
+            no_tasks_label = QLabel("🎉 You're all caught up! No tasks here.")
+            no_tasks_label.setAlignment(Qt.AlignCenter)
+            no_tasks_label.setStyleSheet(f"color: {COLOR_TEXT_SECONDARY}; font-size: 14px; padding: 40px;")
+            self.tasks_layout.addWidget(no_tasks_label)
+        else:
+            for task in visible_tasks:
+                task_widget = TaskItemWidget(task, self.meta.get(task['id']))
+                task_widget.task_toggled.connect(self._handle_toggle_task)
+                task_widget.task_deleted.connect(self._handle_delete_task)
+                task_widget.task_started.connect(self._handle_start_task)
+                self.tasks_layout.addWidget(task_widget)
+        self.tasks_layout.addStretch()
+        self.page_label.setText(f"Page {self.page}")
+        self.prev_btn.setEnabled(self.page > 1)
+        self.next_btn.setEnabled(len(all_filtered) > self.page * self.page_size)
+
+    def _handle_add_task(self):
+        title = self.title_input.text().strip()
+        if not title: return
+        # Normalize due_at to 'YYYY-MM-DD HH:MM:SS' in local time
+        qdt = self.due_date_input.dateTime()
+        # convert to python datetime
+        py_dt = datetime(qdt.date().year(), qdt.date().month(), qdt.date().day(), qdt.time().hour(), qdt.time().minute(), qdt.time().second())
+        due_at = py_dt.strftime('%Y-%m-%d %H:%M:%S')
+        estimated = self.estimated_input.text().strip()
+        est_mins = int(estimated) if estimated.isdigit() else None
+        note = self.note_input.text().strip()
         try:
-            conn = sqlite3.connect(_get_database_path())
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO tasks (user_id, title, is_done, created_at) 
-                VALUES (?, ?, 0, CURRENT_TIMESTAMP)
-            """, (self.user_id, title))
-            conn.commit()
-            conn.close()
-            
-            self.task_input.clear()
-            self.load_data()  # Reload toàn bộ dữ liệu
-            
-        except sqlite3.Error as e:
+            # Use Database helper to add task with metadata (explicit call)
+            self.db.add_task_with_meta(self.user_id, title, note=note, is_done=0, due_at=due_at, estimated_minutes=est_mins, priority=self.current_priority)
+            # Reload tasks to get consistent state (including new id)
+            self.title_input.clear(); self.estimated_input.clear()
+            self.note_input.clear()
+            self._set_priority(4)
+            self.load_data_from_db()
+        except Exception as e:
             print(f"Lỗi khi thêm task: {e}")
+    
+    # Các hàm _handle_toggle_task, _handle_delete_task, ... giữ nguyên
+    def _handle_toggle_task(self, task_id):
+        # ... (giữ nguyên)
+        task = next((t for t in self.tasks if t['id'] == task_id), None)
+        if not task: return
+        new_status = not task['is_done']
+        task['is_done'] = new_status
+        try:
+            self.db.update_task_status(int(task_id), int(new_status))
+        except Exception as e:
+            print(f"Lỗi khi cập nhật trạng thái task: {e}")
+        self.render_tasks()
+
+    def _handle_delete_task(self, task_id):
+        # ... (giữ nguyên)
+        self.tasks = [t for t in self.tasks if t['id'] != task_id]
+        if task_id in self.meta: del self.meta[task_id]
+        if task_id in self.history: del self.history[task_id]
+        try:
+            self.db.delete_task(int(task_id))
+        except Exception as e:
+            print(f"Lỗi khi xóa task: {e}")
+        self.render_tasks()
+
+    def _handle_start_task(self, task_id):
+        # ... (giữ nguyên)
+        self.meta.setdefault(task_id, {})['start'] = time.time()
+        QMessageBox.information(self, "Task Started", "Timer for task has started.")
+
+    def _handle_search_change(self, text):
+        # ... (giữ nguyên)
+        self.search_text = text; self.page = 1; self.render_tasks()
+
+    def _handle_filter_change(self, index):
+        # ... (giữ nguyên)
+        self.filter_status = {0: "all", 1: "pending", 2: "done"}.get(index)
+        self.page = 1; self.render_tasks()
+        
+    def _handle_page_change(self, delta):
+        # ... (giữ nguyên)
+        self.page = max(1, self.page + delta); self.render_tasks()
+        
+    def _check_deadlines(self):
+        # ... (giữ nguyên)
+        now_utc = datetime.utcnow()
+        for task in self.tasks:
+            if not task['is_done'] and task['due_at']:
+                try:
+                    due_date = self._parse_iso_datetime(task['due_at'])
+                    if due_date is None:
+                        continue
+                    time_left = due_date - now_utc
+                    if timedelta(minutes=0) < time_left <= timedelta(minutes=15):
+                        QMessageBox.warning(self, "Deadline Reminder", f"Task sắp đến hạn: {task['title']}\nCòn khoảng {time_left.seconds // 60} phút.")
+                except Exception:
+                    continue
+

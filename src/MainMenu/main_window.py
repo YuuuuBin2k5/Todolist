@@ -6,7 +6,6 @@
 
 import os
 import sys
-import sqlite3
 import json
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout, 
                              QVBoxLayout, QLabel, QMessageBox, QFileDialog, 
@@ -17,23 +16,11 @@ from PyQt5.QtCore import QDateTime, QDate, Qt
 # Import các lớp widget đã được module hóa từ các file khác
 from MainMenu.side_panel import SidePanel
 from MainMenu.calendar_widget import CalendarWidget
-from MainMenu.home_page import HomePageWidget
+from Managers.database_manager import Database
+from MainMenu.home_page import DoNowView
 from MainMenu.group_dialogs import GroupSelectionDialog, MemberListDialog, AddMemberDialog
 from config import *
 
-# [SỬA 1] THÊM HÀM TRỢ GIÚP NÀY VÀO ĐẦU FILE
-def _find_database_path():
-    """Hàm trợ giúp để tìm đường dẫn tuyệt đối đến file database."""
-    try:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        src_dir = os.path.dirname(current_dir)
-        db_path = os.path.join(src_dir, 'Data', 'todolist_database.db')
-        if not os.path.exists(db_path):
-            raise FileNotFoundError(f"Không tìm thấy file database tại: {db_path}")
-        return db_path
-    except Exception as e:
-        print(f"LỖI NGHIÊM TRỌNG: Không thể xác định đường dẫn database. {e}")
-        return None
 
 # Định nghĩa một chuỗi chứa mã CSS (QSS) để tạo kiểu cho toàn bộ ứng dụng
 # ĐÃ HỢP NHẤT TỪ CẢ HAI FILE
@@ -127,24 +114,22 @@ class MainWindow(QMainWindow):
         self.is_leader_of_current_group = False
         self._is_logging_out = False
 
-        # Sử dụng hàm trợ giúp để lấy đường dẫn CSDL một cách an toàn
-        self.db_path = _find_database_path()
-        if not self.db_path:
-            QMessageBox.critical(self, "Lỗi nghiêm trọng", "Không tìm thấy file database. Ứng dụng sẽ đóng.")
-            # Dùng QTimer để đóng cửa sổ sau khi hàm __init__ hoàn tất
-            from PyQt5.QtCore import QTimer
-            QTimer.singleShot(0, self.close)
-            return
-
         self.setWindowTitle("To-do List")
         self.setGeometry(100, 100, 1200, 800)
         self.setStyleSheet(STYLESHEET)
         self.setObjectName("MainWindow")
 
+        self.db = Database()
+
         self.initUI()
         self.side_panel.set_user_info(self.user_name, self.default_role)
         self.side_panel.update_view(self.current_view, False)  # Khởi tạo với personal view, không phải leader
-        self.home_widget.load_data()
+        # Ensure home widget uses the shared Database instance
+        try:
+            if hasattr(self.home_widget, 'load_data_from_db'):
+                self.home_widget.load_data_from_db()
+        except Exception:
+            pass
 
     def closeEvent(self, event):
         """
@@ -223,11 +208,13 @@ class MainWindow(QMainWindow):
         self.main_layout.addLayout(right_panel_layout, 1)
 
         # Trang chủ
-        self.home_widget = HomePageWidget(self.user_id)
+        # Pass shared Database helper into DoNowView to avoid multiple DB instances
+        self.home_widget = DoNowView(self.user_id, db=self.db)
         self.content_stack.addWidget(self.home_widget)
 
         # Khu vực lịch
-        self.calendar_widget = CalendarWidget(self.user_id, self.db_path)
+        # Use the shared Database helper and pass it to CalendarWidget
+        self.calendar_widget = CalendarWidget(self.user_id, self.db)
         self.content_stack.addWidget(self.calendar_widget)
 
         # Mặc định hiển thị trang chủ
@@ -250,17 +237,21 @@ class MainWindow(QMainWindow):
         self.group_title_label.show()
         
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute("SELECT leader_id FROM groups WHERE group_id = ?", (self.current_group_id,))
-            leader_id = cursor.fetchone()[0]
+            leader_id = self.db.get_group_leader(self.current_group_id)
             self.is_leader_of_current_group = (self.user_id == leader_id)
             role = "Quản trị viên" if self.is_leader_of_current_group else "Thành viên"
             self.side_panel.set_user_info(self.user_name, role)
             self.side_panel.update_view(self.current_view, self.is_leader_of_current_group)
-            conn.close()
-        except sqlite3.Error as e:
+        except Exception as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Không thể tải thông tin nhóm: {e}")
+            return
+
+        # Inform calendar about group context and switch its view mode
+        try:
+            self.calendar_widget.set_group_context(self.current_group_id)
+            self.calendar_widget.switch_view_mode('group')
+        except Exception:
+            pass
     
     def _handle_personal_view(self):
         """
@@ -277,8 +268,13 @@ class MainWindow(QMainWindow):
         # Cập nhật dữ liệu cho trang hiện tại
         if self.current_content == 'home':
             self.home_widget.user_id = self.user_id
-            self.home_widget.load_data()
+            self.home_widget.load_data_from_db()
         elif self.current_content == 'calendar':
+            # Ensure calendar knows we're in personal mode
+            try:
+                self.calendar_widget.switch_view_mode('personal')
+            except Exception:
+                pass
             self.load_personal_tasks()
 
     def _handle_group_view(self):
@@ -329,8 +325,17 @@ class MainWindow(QMainWindow):
         
         # Cập nhật dữ liệu cho lịch
         if self.current_view == 'personal':
+            try:
+                self.calendar_widget.switch_view_mode('personal')
+            except Exception:
+                pass
             self.load_personal_tasks()
         elif self.current_view == 'group' and self.current_group_id:
+            try:
+                self.calendar_widget.set_group_context(self.current_group_id)
+                self.calendar_widget.switch_view_mode('group')
+            except Exception:
+                pass
             self.load_group_tasks(self.current_group_id)
 
     def _show_member_list(self):
@@ -349,13 +354,11 @@ class MainWindow(QMainWindow):
         """
         tasks_by_day = {}
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute("SELECT due_at, title, is_done, note FROM tasks WHERE user_id = ?", (self.user_id,))
-            tasks = cursor.fetchall()
-
-            for due_at_str, title, is_done, note in tasks:
+            month_str = self.calendar_widget.current_date.strftime('%Y-%m')
+            tasks = self.db.get_tasks_for_user_month(self.user_id, month_str)
+            for task in tasks:
+                # task: (task_id, title, is_done, note, due_at)
+                task_id, title, is_done, note, due_at_str = task
                 if due_at_str:
                     task_date = QDate.fromString(due_at_str[:10], "yyyy-MM-dd")
                     if task_date.year() == self.calendar_widget.current_date.year and \
@@ -363,15 +366,36 @@ class MainWindow(QMainWindow):
                         day = task_date.day()
                         if day not in tasks_by_day:
                             tasks_by_day[day] = []
-                        tasks_by_day[day].append({'title': title, 'is_done': is_done, 'note': note})
+                        tasks_by_day[day].append({'task_id': task_id, 'title': title, 'is_done': is_done, 'note': note, 'due_at': due_at_str})
+
+            # Also include group tasks assigned to this user in the same month
+            try:
+                month_str = self.calendar_widget.current_date.strftime('%Y-%m')
+                group_tasks = self.db.get_group_tasks_for_user_month(self.user_id, month_str)
+                for gt in group_tasks:
+                    # gt: (task_id, group_id, assignee_id, title, note, is_done, due_at)
+                    g_task_id, g_group_id, g_assignee_id, g_title, g_note, g_is_done, g_due_at = gt
+                    if g_due_at:
+                        g_date = QDate.fromString(g_due_at[:10], "yyyy-MM-dd")
+                        if g_date.year() == self.calendar_widget.current_date.year and g_date.month() == self.calendar_widget.current_date.month:
+                            g_day = g_date.day()
+                            if g_day not in tasks_by_day:
+                                tasks_by_day[g_day] = []
+                            assignee_name = self.db.get_user_name(g_assignee_id) or "Chưa phân công"
+                            tasks_by_day[g_day].append({
+                                'task_id': g_task_id,
+                                'title': g_title,
+                                'is_done': g_is_done,
+                                'note': g_note,
+                                'due_at': g_due_at,
+                                'assignee_name': assignee_name
+                            })
+            except Exception:
+                pass
 
             self.calendar_widget.populate_calendar(tasks_by_day)
-
-        except sqlite3.Error as e:
+        except Exception as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Lỗi khi tải công việc cá nhân: {e}")
-        finally:
-            if conn:
-                conn.close()
 
     def load_group_tasks(self, group_id):
         """
@@ -379,18 +403,11 @@ class MainWindow(QMainWindow):
         """
         tasks_by_day = {}
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                SELECT gt.due_at, gt.title, gt.is_done, gt.note, u.user_name as assignee_name
-                FROM group_tasks gt
-                LEFT JOIN users u ON gt.assignee_id = u.user_id
-                WHERE gt.group_id = ?
-            """, (group_id,))
-            tasks = cursor.fetchall()
-
-            for due_at_str, title, is_done, note, assignee_name in tasks:
+            month_str = self.calendar_widget.current_date.strftime('%Y-%m')
+            all_tasks = self.db.get_group_tasks_for_month(group_id, month_str)
+            for task in all_tasks:
+                # (task_id, group_id, assignee_id, title, note, is_done, due_at)
+                task_id, group_id, assignee_id, title, note, is_done, due_at_str = task
                 if due_at_str:
                     task_date = QDate.fromString(due_at_str[:10], "yyyy-MM-dd")
                     if task_date.year() == self.calendar_widget.current_date.year and \
@@ -398,17 +415,16 @@ class MainWindow(QMainWindow):
                         day = task_date.day()
                         if day not in tasks_by_day:
                             tasks_by_day[day] = []
+                        assignee_name = self.db.get_user_name(assignee_id) or "Chưa phân công"
                         tasks_by_day[day].append({
-                            'title': title, 
-                            'is_done': is_done, 
+                            'task_id': task_id,
+                            'title': title,
+                            'is_done': is_done,
                             'note': note,
-                            'assignee_name': assignee_name or "Chưa phân công"
+                            'due_at': due_at_str,
+                            'assignee_name': assignee_name
                         })
 
             self.calendar_widget.populate_calendar(tasks_by_day)
-
-        except sqlite3.Error as e:
+        except Exception as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Lỗi khi tải công việc nhóm: {e}")
-        finally:
-            if conn:
-                conn.close()
