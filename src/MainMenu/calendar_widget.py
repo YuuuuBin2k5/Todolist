@@ -8,6 +8,7 @@ from PyQt5.QtGui import QFontDatabase, QFont
 from PyQt5.QtCore import Qt
 from MainMenu.components import DayWidget, TaskWidget, GroupTaskWidget, TaskBadge
 from Managers.database_manager import Database
+from config import CALENDAR_BG_GRADIENT_START, CALENDAR_BG_GRADIENT_END, CALENDAR_MONTH_PILL_START, CALENDAR_MONTH_PILL_END, FONT_PATH
 
 calendar.setfirstweekday(calendar.SUNDAY)
 
@@ -57,7 +58,8 @@ class CalendarWidget(QWidget):
         # Modernized header with centered month label inside a pill and prev/next icons
         # Try to load a bundled font for a nicer look
         try:
-            font_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'assets', 'fonts', 'BeVietnamPro-Regular.ttf'))
+            # Prefer centralized FONT_PATH if available
+            font_path = FONT_PATH
             if os.path.exists(font_path):
                 QFontDatabase.addApplicationFont(font_path)
                 app_font = QFont("BeVietnamPro-Regular")
@@ -68,8 +70,8 @@ class CalendarWidget(QWidget):
 
         self.main_layout = QVBoxLayout(self)
         # overall background gradient (ocean theme)
-        self.setStyleSheet('''
-            QWidget { background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #e6f7ff, stop:1 #d0f0ff); }
+        self.setStyleSheet(f'''
+            QWidget {{ background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 {CALENDAR_BG_GRADIENT_START}, stop:1 {CALENDAR_BG_GRADIENT_END}); }}
         ''')
         header_layout = QHBoxLayout()
         self.prev_month_btn = QPushButton("◀")
@@ -86,11 +88,7 @@ class CalendarWidget(QWidget):
         font.setBold(True)
         self.month_label.setFont(font)
         # month label - ocean pill
-        self.month_label.setStyleSheet("padding: 10px 24px; background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0277bd, stop:1 #26c6da); border-radius:18px; color: white;")
-        font_ml = self.month_label.font()
-        font_ml.setPointSize(20)
-        font_ml.setBold(True)
-        self.month_label.setFont(font_ml)
+        self.month_label.setStyleSheet(f"padding: 10px 24px; background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {CALENDAR_MONTH_PILL_START}, stop:1 {CALENDAR_MONTH_PILL_END}); border-radius:18px; color: white;")
 
         header_layout.addStretch()
         header_layout.addWidget(self.prev_month_btn)

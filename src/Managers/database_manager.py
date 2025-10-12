@@ -7,8 +7,6 @@ class Database:
     """Trợ giúp SQLite cho app: users, tasks, groups, group_members, group_tasks.
     Dùng _execute_query để tập trung thao tác và xử lý lỗi SQL.
     """
-    
-
     def __init__(self):
         # Đường dẫn mặc định đến file DB
         base_dir = os.path.dirname(os.path.dirname(__file__))

@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (QDialog, QFrame, QHBoxLayout, QCheckBox, QLabel, QV
                              QGraphicsDropShadowEffect, QGraphicsOpacityEffect)
 from PyQt5.QtCore import Qt, QMimeData, QDate, QDateTime, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QDrag, QCursor, QFont, QColor, QFontMetrics
+from config import COLOR_WHITE, COLOR_BORDER, TEXT_MUTED, COLOR_PRIMARY, COLOR_TEXT_PRIMARY
 
 # Thiết lập ngôn ngữ Tiếng Việt để hiển thị đúng Thứ trong tuần
 try:
@@ -42,10 +43,10 @@ class TaskDetailItemWidget(QFrame):
         is_group = task_data.get('is_group', False)
 
         # styling for a clean card-like look
-        self.setStyleSheet("""
-            QFrame#TaskDetailItem { background: #ffffff; border: 1px solid #e6eef3; border-radius: 10px; padding: 10px; }
-            QLabel#StatusSmall { font-size: 12px; color: #666; }
-            QLabel#NoteLabelInDialog { color: #444; }
+        self.setStyleSheet(f"""
+            QFrame#TaskDetailItem {{ background: {COLOR_WHITE}; border: 1px solid {COLOR_BORDER}; border-radius: 10px; padding: 10px; }}
+            QLabel#StatusSmall {{ font-size: 12px; color: {TEXT_MUTED}; }}
+            QLabel#NoteLabelInDialog {{ color: {COLOR_TEXT_PRIMARY}; }}
         """)
 
         # Outer horizontal layout: content on left, checkbox column on right
@@ -65,15 +66,15 @@ class TaskDetailItemWidget(QFrame):
         info_row = QHBoxLayout()
         status_label = QLabel("Đã hoàn thành" if is_done else "Chưa hoàn thành")
         status_label.setObjectName('StatusSmall')
-        status_label.setStyleSheet('color:#666;')
+        status_label.setStyleSheet(f'color: {TEXT_MUTED};')
         info_row.addWidget(status_label)
         if assignee:
             assignee_label = QLabel(f"👤 {assignee}")
-            assignee_label.setStyleSheet('color:#0056b3; margin-left:8px;')
+            assignee_label.setStyleSheet(f'color: {COLOR_PRIMARY}; margin-left:8px;')
             info_row.addWidget(assignee_label)
         if due_at:
             due_label = QLabel(f"⏰ {due_at}")
-            due_label.setStyleSheet('color:#666; margin-left:8px;')
+            due_label.setStyleSheet(f'color: {TEXT_MUTED}; margin-left:8px;')
             info_row.addWidget(due_label)
         info_row.addStretch()
         content_layout.addLayout(info_row)

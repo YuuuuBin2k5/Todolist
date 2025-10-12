@@ -13,22 +13,9 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QDateTime
 from PyQt5.QtGui import QIcon, QColor
 
-# --- Cấu hình ---
-ICON_DIR = os.path.join(os.path.dirname(__file__), '..', 'assets', 'icons')
-
-# --- Bảng màu ---
-COLOR_BACKGROUND = "#F4F6F8"
-COLOR_PRIMARY = "#4A90E2"
-COLOR_SUCCESS = "#2ECC71"
-COLOR_DANGER = "#E74C3C"
-COLOR_TEXT_PRIMARY = "#2E3A4B"
-COLOR_TEXT_SECONDARY = "#8FA0B3"
-COLOR_BORDER = "#EAECEF"
-COLOR_WHITE = "#FFFFFF"
-COLOR_HOVER = "#5AA0F2"
-
-# [THÊM] Bảng màu cho Priority
-PRIORITY_COLORS = { 1: "#d1453b", 2: "#09eb32", 3: "#4073d6", 4: "#808080" }
+from config import ICON_DIR, COLOR_BACKGROUND, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_DANGER, COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY, COLOR_BORDER, COLOR_HOVER, PRIORITY_COLORS
+# COLOR_WHITE is provided by config.py as COLOR_WHITE
+from config import COLOR_WHITE
 
 
 def _parse_iso_datetime_module(s: str):

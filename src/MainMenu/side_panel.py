@@ -8,6 +8,7 @@
 
 from PyQt5.QtWidgets import QFrame, QVBoxLayout, QLabel, QPushButton, QSpacerItem, QSizePolicy
 from PyQt5.QtGui import QPainter, QBrush, QColor, QPixmap
+from config import COLOR_GRAY
 from PyQt5.QtCore import Qt, pyqtSignal
 
 class SidePanel(QFrame):
@@ -168,10 +169,10 @@ class SidePanel(QFrame):
         pixmap.fill(Qt.transparent)
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.setBrush(QBrush(QColor("#cccccc")))
+        painter.setBrush(QBrush(QColor(COLOR_GRAY)))
         painter.setPen(Qt.NoPen)
         painter.drawEllipse(0, 0, self.avatar.width(), self.avatar.height())
-        painter.end()  
+        painter.end()
         self.avatar.setPixmap(pixmap)
         
   

@@ -45,15 +45,15 @@ class ForgotPasswordDialog(QDialog):
 
         main_layout = QVBoxLayout(self)
         main_layout.addWidget(self.stacked_widget)
-        self.setStyleSheet("""
-            QDialog#ForgotPasswordDialog { background-color: #f9f9f9; }
-            QLabel { font-size: 14px; }
-            QLineEdit { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-            QPushButton { 
-                padding: 10px; background-color: #007bff; color: white; 
+        self.setStyleSheet(f"""
+            QDialog#ForgotPasswordDialog {{ background-color: #f9f9f9; }}
+            QLabel {{ font-size: 14px; }}
+            QLineEdit {{ padding: 8px; border: 1px solid #ccc; border-radius: 4px; }}
+            QPushButton {{ 
+                padding: 10px; background-color: {BTN_PRIMARY_BG}; color: {COLOR_WHITE}; 
                 border: none; border-radius: 4px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #0056b3; }
+            }}
+            QPushButton:hover {{ background-color: {BTN_PRIMARY_BG_HOVER}; }}
         """)
 
     # --- Bước 1: Trang nhập Email ---
@@ -282,29 +282,29 @@ class LoginRegisterApp(QMainWindow):
             icon_label.setPixmap(icon_pixmap_scaled)
             icon_label.setFixedSize(40, 40)
             icon_label.setAlignment(Qt.AlignCenter)
-            icon_label.setStyleSheet("border: 1px solid {COLOR_GRAY}; border-radius: 20px;")
+            icon_label.setStyleSheet(f"border: 1px solid {COLOR_GRAY}; border-radius: 20px;")
             social_layout.addWidget(icon_label)
         layout.addLayout(social_layout)
         subtitle_label = QLabel(f"<p>{subtitle}</p>")
-        subtitle_label.setStyleSheet("font-size: 14px; color: #555;")
+        subtitle_label.setStyleSheet(f"font-size: 14px; color: {TEXT_MUTED};")
         subtitle_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(subtitle_label)
         email_input = QLineEdit(placeholderText="Email")
-        email_input.setStyleSheet("padding: 10px; height: 40px; border: none; background-color: #f3f3f3; border-radius: 8px;")
+        email_input.setStyleSheet(f"padding: 10px; height: 40px; border: none; background-color: {INPUT_BG}; border-radius: 8px;")
         layout.addWidget(email_input)
         name_input, password_input = None, None
         if "Create" in title:
             name_input = QLineEdit(placeholderText="Name")
-            name_input.setStyleSheet("padding: 10px; height: 40px; border: none; background-color: #f3f3f3; border-radius: 8px;")
+            name_input.setStyleSheet(f"padding: 10px; height: 40px; border: none; background-color: {INPUT_BG}; border-radius: 8px;")
             layout.addWidget(name_input)
         password_input = QLineEdit(placeholderText="Password")
-        password_input.setStyleSheet("padding: 10px; height: 40px; border: none; background-color: #f3f3f3; border-radius: 8px;")
+        password_input.setStyleSheet(f"padding: 10px; height: 40px; border: none; background-color: {INPUT_BG}; border-radius: 8px;")
         password_input.setEchoMode(QLineEdit.Password)
         layout.addWidget(password_input)
         if "Sign In" in title:
             # [THAY ĐỔI] Biến label thành button có thể nhấn
             forgot_password_btn = QPushButton("Forgot Your Password?")
-            forgot_password_btn.setStyleSheet("font-size: 12px; margin-top: 10px; margin-bottom: 20px; border: none; color: #555;")
+            forgot_password_btn.setStyleSheet(f"font-size: 12px; margin-top: 10px; margin-bottom: 20px; border: none; color: {TEXT_MUTED};")
             forgot_password_btn.setCursor(Qt.PointingHandCursor)
             forgot_password_btn.clicked.connect(self.show_forgot_password_dialog)
             layout.addWidget(forgot_password_btn, alignment=Qt.AlignCenter)
