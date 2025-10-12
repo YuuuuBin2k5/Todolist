@@ -372,7 +372,7 @@ class LoginRegisterApp(QMainWindow):
             # Use Database helper for authentication
             db_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Data', 'todolist_database.db'))
             db = Database(db_path)
-            user = db._execute_query("SELECT user_id, user_name FROM users WHERE email = ? AND user_password = ?", (email, password), fetchone=True)
+            user = db._execute_query("SELECT user_id, user_name FROM users WHERE email = ? AND user_password = ?", (email, password), fetch="one")
             if user:
                 user_id, user_name = user[0], user[1]
                 self._allow_close = True

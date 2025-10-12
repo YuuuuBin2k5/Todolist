@@ -13,34 +13,24 @@ class Database:
     def __init__(self, db_path: str):
         self.db_path = db_path
 
-    def _execute_query(self, query: str, params: Tuple = (), commit: bool = False,
-                       fetchone: bool = False, fetchall: bool = False) -> Optional[Any]:
+
+    def _execute_query(self, query, params=(), commit=False, fetch=None):
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute(query, params)
+            cur = conn.cursor()
+            cur.execute(query, params)
+
             if commit:
                 conn.commit()
 
-            if fetchone:
-                return cursor.fetchone()
-
-            if fetchall:
-                return cursor.fetchall()
-
-            return None
+            if fetch == "one":
+                return cur.fetchone()
+            if fetch == "all":
+                return cur.fetchall()
         except sqlite3.Error as e:
-            print(f"[DB ERROR] {e} | query={query} params={params}")
-            return None
+            print(f"[DB ERROR] {e} | {query} {params}")
         finally:
-            try:
-                cursor.close()
-            except Exception:
-                pass
-            try:
-                conn.close()
-            except Exception:
-                pass
+            conn.close()
 
     # ----------------- Users ---------------------------------
     def create_user(self, user_name: str, password: str, email: str) -> bool:
@@ -50,15 +40,15 @@ class Database:
 
     def get_user_by_credentials(self, user_name: str, password: str) -> Optional[Tuple]:
         query = "SELECT user_id, user_name FROM users WHERE user_name = ? AND user_password = ?"
-        return self._execute_query(query, (user_name, password), fetchone=True)
+        return self._execute_query(query, (user_name, password), fetch="one")
 
     def get_user_by_id(self, user_id: int) -> Optional[Tuple]:
         query = "SELECT user_id, user_name, email FROM users WHERE user_id = ?"
-        return self._execute_query(query, (user_id,), fetchone=True)
+        return self._execute_query(query, (user_id,), fetch="one")
 
     def get_user_by_email(self, email: str) -> Optional[Tuple]:
         query = "SELECT user_id, user_name FROM users WHERE email = ?"
-        return self._execute_query(query, (email,), fetchone=True)
+        return self._execute_query(query, (email,), fetch="one")
 
     # ----------------- Tasks (personal) -----------------------
     def add_task(self, user_id: int, title: str, note: str = "", is_done: int = 0, due_at: Optional[str] = None, estimated_minutes: Optional[int] = None, priority: int = 2) -> None:
@@ -82,13 +72,13 @@ class Database:
 
     def get_tasks_for_user_month(self, user_id: int, month_str: str) -> List[Tuple]:
         query = "SELECT task_id, title, is_done, note, due_at FROM tasks WHERE user_id = ? AND strftime('%Y-%m', due_at) = ?"
-        res = self._execute_query(query, (user_id, month_str), fetchall=True)
+        res = self._execute_query(query, (user_id, month_str), fetch="all")
         return res or []
 
     def get_tasks_for_user(self, user_id: int) -> List[Tuple]:
         # Return task rows with fields expected by HomePage: (task_id, title, is_done, due_at, estimate_minutes, priority, note)
         query = "SELECT task_id, title, is_done, due_at, estimate_minutes, priority, note FROM tasks WHERE user_id = ?"
-        res = self._execute_query(query, (user_id,), fetchall=True)
+        res = self._execute_query(query, (user_id,), fetch="all")
         return res or []
 
     def update_task_status(self, task_id: int, is_done: int) -> None:
@@ -129,16 +119,16 @@ class Database:
 
     def get_groups_for_user(self, user_id: int) -> List[Tuple]:
         query = "SELECT g.group_id, g.group_name FROM groups g JOIN group_members gm ON g.group_id = gm.group_id WHERE gm.user_id = ?"
-        return self._execute_query(query, (user_id,), fetchall=True) or []
+        return self._execute_query(query, (user_id,), fetch="all") or []
 
     def get_group_leader(self, group_id: int) -> Optional[int]:
         query = "SELECT leader_id FROM groups WHERE group_id = ?"
-        res = self._execute_query(query, (group_id,), fetchone=True)
+        res = self._execute_query(query, (group_id,), fetch="one")
         return res[0] if res else None
 
     def get_group_members(self, group_id: int) -> List[Tuple]:
         query = "SELECT u.user_id, u.user_name, u.email FROM users u JOIN group_members gm ON u.user_id = gm.user_id WHERE gm.group_id = ?"
-        return self._execute_query(query, (group_id,), fetchall=True) or []
+        return self._execute_query(query, (group_id,), fetch="all") or []
 
     # ----------------- Group tasks ----------------------------
     def add_group_task(self, group_id: int, creator_id: int, title: str, note: str = "", is_done: int = 0, due_at: Optional[str] = None, assignee_id: Optional[int] = None) -> None:
@@ -153,7 +143,7 @@ class Database:
     def get_group_tasks_for_month(self, group_id: int, month_str: str) -> List[Tuple]:
         # include task_id so UI can reference and delete/update specific group tasks
         query = "SELECT task_id, group_id, assignee_id, title, note, is_done, due_at FROM group_tasks WHERE group_id = ? AND strftime('%Y-%m', due_at) = ?"
-        return self._execute_query(query, (group_id, month_str), fetchall=True) or []
+        return self._execute_query(query, (group_id, month_str), fetch="all") or []
 
     def delete_group_task(self, task_id: int) -> None:
         query = "DELETE FROM group_tasks WHERE task_id = ?"
@@ -166,17 +156,17 @@ class Database:
     def get_task_by_id(self, task_id: int) -> Optional[Tuple]:
         # Return columns in natural schema order: task_id, user_id, title, note, is_done, due_at
         query = "SELECT task_id, user_id, title, note, is_done, due_at FROM tasks WHERE task_id = ?"
-        return self._execute_query(query, (task_id,), fetchone=True)
+        return self._execute_query(query, (task_id,), fetch="one")
 
     def get_group_task_by_id(self, task_id: int) -> Optional[Tuple]:
         # Select columns according to actual table schema: task_id, group_id, assignee_id, title, note, is_done, created_at, due_at
         query = "SELECT task_id, group_id, assignee_id, title, note, is_done, created_at, due_at FROM group_tasks WHERE task_id = ?"
-        return self._execute_query(query, (task_id,), fetchone=True)
+        return self._execute_query(query, (task_id,), fetch="one")
 
     def get_group_tasks_for_user_month(self, user_id: int, month_str: str) -> List[Tuple]:
         """Return group tasks assigned to a specific user in a given year-month."""
         query = "SELECT task_id, group_id, assignee_id, title, note, is_done, due_at FROM group_tasks WHERE assignee_id = ? AND strftime('%Y-%m', due_at) = ?"
-        return self._execute_query(query, (user_id, month_str), fetchall=True) or []
+        return self._execute_query(query, (user_id, month_str), fetch="all") or []
 
     # ----------------- Utility --------------------------------
     def get_user_name(self, user_id: int) -> Optional[str]:

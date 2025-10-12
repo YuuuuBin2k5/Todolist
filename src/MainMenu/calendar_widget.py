@@ -378,6 +378,7 @@ class CalendarWidget(QWidget):
         except Exception as e:
             print(f"Lỗi khi lấy task nhóm: {e}")
         return tasks_by_day
+    
     def _get_user_name(self, user_id):
         if not user_id:
             return "Chưa giao"

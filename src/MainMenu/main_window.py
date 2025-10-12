@@ -21,7 +21,6 @@ from MainMenu.home_page import DoNowView
 from MainMenu.group_dialogs import GroupSelectionDialog, MemberListDialog, AddMemberDialog
 from config import *
 
-# [SỬA 1] THÊM HÀM TRỢ GIÚP NÀY VÀO ĐẦU FILE
 def _find_database_path():
     """Hàm trợ giúp để tìm đường dẫn tuyệt đối đến file database."""
     try:
