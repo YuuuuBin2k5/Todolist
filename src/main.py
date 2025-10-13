@@ -20,9 +20,6 @@ if __name__ == "__main__":
             QWidget {{
                 font-family: 'Segoe UI', 'Arial', 'DejaVu Sans', sans-serif;
             }}
-            QPushButton {{
-                cursor: pointhuyer;
-            }}
         """)
     else:
         # Lấy tên font đã tải và áp dụng cho toàn bộ ứng dụng
@@ -31,9 +28,6 @@ if __name__ == "__main__":
         app.setStyleSheet(f"""
             QWidget {{
                 font-family: '{font_family}', 'Segoe UI', 'Arial', 'DejaVu Sans', sans-serif;
-            }}
-            QPushButton {{
-                cursor: pointer;
             }}
         """)
 

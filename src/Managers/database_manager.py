@@ -204,12 +204,37 @@ class Database:
 
         Không trả về; commit khi thành công.
         """
-        if due_at is None:
-            query = "INSERT INTO group_tasks (group_id, assignee_id, title, note, is_done, creator_id, created_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
-            params = (group_id, assignee_id, title, note, is_done, creator_id)
+        # Defensive: some DB instances may not have a creator_id (or leader_id) column
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cur = conn.cursor()
+            cur.execute("PRAGMA table_info(group_tasks)")
+            cols = [r[1] for r in cur.fetchall()]
+            cur.close()
+            conn.close()
+        except Exception:
+            cols = []
+
+        # prefer column named 'creator_id', fall back to 'leader_id' if present
+        has_creator = 'creator_id' in cols or 'leader_id' in cols
+        creator_col = 'creator_id' if 'creator_id' in cols else ('leader_id' if 'leader_id' in cols else None)
+
+        if has_creator and creator_col:
+            if due_at is None:
+                query = f"INSERT INTO group_tasks (group_id, assignee_id, title, note, is_done, {creator_col}, created_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+                params = (group_id, assignee_id, title, note, is_done, creator_id)
+            else:
+                query = f"INSERT INTO group_tasks (group_id, assignee_id, title, note, is_done, due_at, {creator_col}, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+                params = (group_id, assignee_id, title, note, is_done, due_at, creator_id)
         else:
-            query = "INSERT INTO group_tasks (group_id, assignee_id, title, note, is_done, due_at, creator_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
-            params = (group_id, assignee_id, title, note, is_done, due_at, creator_id)
+            # older schema without creator/leader column
+            if due_at is None:
+                query = "INSERT INTO group_tasks (group_id, assignee_id, title, note, is_done, created_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+                params = (group_id, assignee_id, title, note, is_done)
+            else:
+                query = "INSERT INTO group_tasks (group_id, assignee_id, title, note, is_done, due_at, created_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+                params = (group_id, assignee_id, title, note, is_done, due_at)
+
         self._execute_query(query, params, commit=True)
 
     def get_group_tasks(self, group_id: int) -> List[Tuple]:

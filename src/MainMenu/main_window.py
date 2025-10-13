@@ -239,6 +239,28 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         try:
+            # Protect against child widgets requesting overly large sizeHints by
+            # capping the content area to the available screen width minus the side panel.
+            screen = QGuiApplication.primaryScreen()
+            if screen and hasattr(self, 'content_stack'):
+                try:
+                    screen_geo = screen.availableGeometry()
+                    screen_w = screen_geo.width()
+                    side_w = self.side_panel.frameGeometry().width() if hasattr(self, 'side_panel') else 300
+                    # leave some margin for window frame
+                    avail = max(400, screen_w - side_w - 80)
+                    # apply cap to content stack and calendar widget to prevent expansion
+                    try:
+                        self.content_stack.setMaximumWidth(avail)
+                    except Exception:
+                        pass
+                    try:
+                        if hasattr(self, 'calendar_widget') and self.calendar_widget:
+                            self.calendar_widget.setMaximumWidth(avail)
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
             self._log_window_size(event_note='show')
         except Exception:
             pass
@@ -331,11 +353,84 @@ class MainWindow(QMainWindow):
             log_path = assets_dir / 'window_sizes.log'
             w = self.frameGeometry().width()
             h = self.frameGeometry().height()
+            # screen / DPI info
+            try:
+                screen = QGuiApplication.primaryScreen()
+                screen_geo = screen.availableGeometry() if screen else None
+                screen_w = screen_geo.width() if screen_geo else 0
+                screen_h = screen_geo.height() if screen_geo else 0
+                dpr = screen.devicePixelRatio() if screen else 1
+            except Exception:
+                screen_w = screen_h = dpr = 0
+            # window state
+            try:
+                is_max = bool(self.isMaximized())
+                is_full = bool(self.isFullScreen())
+            except Exception:
+                is_max = is_full = False
+            # sizes of important child widgets
+            try:
+                content_sz = self.content_stack.frameGeometry() if hasattr(self, 'content_stack') else None
+                content_w = content_sz.width() if content_sz else 0
+                content_h = content_sz.height() if content_sz else 0
+            except Exception:
+                content_w = content_h = 0
+            # sizeHint / minimumSizeHint diagnostics for content and key children
+            try:
+                content_hint = self.content_stack.sizeHint() if hasattr(self, 'content_stack') else None
+                content_hint_w = content_hint.width() if content_hint else 0
+                content_hint_h = content_hint.height() if content_hint else 0
+                content_min = self.content_stack.minimumSizeHint() if hasattr(self, 'content_stack') else None
+                content_min_w = content_min.width() if content_min else 0
+                content_min_h = content_min.height() if content_min else 0
+            except Exception:
+                content_hint_w = content_hint_h = content_min_w = content_min_h = 0
+            try:
+                side_sz = self.side_panel.frameGeometry() if hasattr(self, 'side_panel') else None
+                side_w = side_sz.width() if side_sz else 0
+                side_h = side_sz.height() if side_sz else 0
+            except Exception:
+                side_w = side_h = 0
+            # home widget diagnostics
+            try:
+                hw = getattr(self, 'home_widget', None)
+                hw_hint = hw.sizeHint() if hw else None
+                hw_hint_w = hw_hint.width() if hw_hint else 0
+                hw_hint_h = hw_hint.height() if hw_hint else 0
+            except Exception:
+                hw_hint_w = hw_hint_h = 0
+            try:
+                tasks_c = getattr(hw, 'tasks_container', None)
+                tc_hint = tasks_c.sizeHint() if tasks_c else None
+                tc_hint_w = tc_hint.width() if tc_hint else 0
+                tc_hint_h = tc_hint.height() if tc_hint else 0
+            except Exception:
+                tc_hint_w = tc_hint_h = 0
+            # calendar widget diagnostics
+            try:
+                cal = getattr(self, 'calendar_widget', None)
+                cal_hint = cal.sizeHint() if cal else None
+                cal_hint_w = cal_hint.width() if cal_hint else 0
+                cal_hint_h = cal_hint.height() if cal_hint else 0
+            except Exception:
+                cal_hint_w = cal_hint_h = 0
             now = datetime.datetime.utcnow().isoformat() + 'Z'
             user_info = f"user_id={self.user_id};user_name={self.user_name}"
-            content = f"{now}\t{event_note}\t{user_info}\twidth={w}\theight={h}\n"
+            content = (
+                f"{now}\t{event_note}\t{user_info}\twidth={w}\theight={h}"
+                f"\tscreen={screen_w}x{screen_h}\tdpr={dpr}\tis_max={is_max}\tis_full={is_full}"
+                f"\tcontent={content_w}x{content_h}\tside={side_w}x{side_h}"
+                f"\tcontent_hint={content_hint_w}x{content_hint_h}\tcontent_min={content_min_w}x{content_min_h}"
+                f"\thome_hint={hw_hint_w}x{hw_hint_h}\ttasks_hint={tc_hint_w}x{tc_hint_h}\tcal_hint={cal_hint_w}x{cal_hint_h}"
+                f"\n"
+            )
             with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(content)
+            # also echo to stdout so running the app shows the record in console
+            try:
+                print('WINDOW_LOG:', content.strip())
+            except Exception:
+                pass
         except Exception:
             pass
     

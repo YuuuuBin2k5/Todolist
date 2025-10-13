@@ -3,8 +3,9 @@
 import calendar
 from datetime import datetime, timedelta
 import os
+import logging
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QGridLayout, QApplication, QMessageBox
-from PyQt5.QtGui import QFontDatabase, QFont
+from PyQt5.QtGui import QFontDatabase, QFont, QGuiApplication
 from PyQt5.QtCore import Qt
 from MainMenu.components import DayWidget, TaskWidget, GroupTaskWidget, TaskBadge
 from Managers.database_manager import Database
@@ -39,7 +40,7 @@ class CalendarWidget(QWidget):
 
     # [MỚI] Hàm để chuyển đổi chế độ xem
     def switch_view_mode(self, mode):
-        print(f"CalendarWidget chuyển sang chế độ: {mode}")
+        logging.debug(f"CalendarWidget chuyển sang chế độ: {mode}")
         self.current_view_mode = mode
         self.populate_calendar() # Tải lại lịch với chế độ mới
 
@@ -115,6 +116,32 @@ class CalendarWidget(QWidget):
         except Exception:
             pass
         return None
+
+    def _get_current_group_members(self) -> list:
+        """Return a list of (user_id, user_name) for the current group.
+
+        Ensure the group leader appears first in the list so the AddTaskDialog
+        shows the leader prominently.
+        """
+        try:
+            group_id = self.current_group_id or (self.db.get_groups_for_user(self.user_id) or [None])[0]
+            if not group_id:
+                return []
+            members = self.db.get_group_members(group_id) or []
+            # members: list of tuples (user_id, user_name)
+            leader_id = None
+            try:
+                leader_id = self.db.get_group_leader(group_id)
+            except Exception:
+                leader_id = None
+            if leader_id:
+                # place leader first
+                leader = [m for m in members if m[0] == leader_id]
+                others = [m for m in members if m[0] != leader_id]
+                return leader + others
+            return members
+        except Exception:
+            return []
 
     def _parse_iso_datetime(self, s: str):
         """Try to parse many ISO-like datetime strings into a datetime object.
@@ -199,6 +226,44 @@ class CalendarWidget(QWidget):
 
         if tasks:
             self._display_tasks(tasks)
+        # Enforce column widths so calendar doesn't expand based on content: divide available width by 7
+        try:
+            # determine available width: prefer parent window width if available
+            parent_win = self.window()
+            screen = QGuiApplication.primaryScreen()
+            screen_w = screen.availableGeometry().width() if screen else 1920
+            side_w = 300
+            try:
+                if parent_win and hasattr(parent_win, 'side_panel'):
+                    side_w = parent_win.side_panel.frameGeometry().width()
+            except Exception:
+                side_w = side_w
+            try:
+                parent_w = parent_win.frameGeometry().width() if parent_win else screen_w
+            except Exception:
+                parent_w = screen_w
+            avail = max(600, min(parent_w - side_w - 80, screen_w - side_w - 80))
+            # compute per-day cell width
+            cell_w = max(100, avail // 7)
+            # apply column minimum and fix each DayWidget width
+            for c in range(self.grid_layout.columnCount()):
+                try:
+                    self.grid_layout.setColumnMinimumWidth(c, cell_w)
+                except Exception:
+                    pass
+            for row in range(1, self.grid_layout.rowCount()):
+                for col in range(self.grid_layout.columnCount()):
+                    item = self.grid_layout.itemAtPosition(row, col)
+                    if item and item.widget() is not None:
+                        try:
+                            w = item.widget()
+                            w.setMinimumWidth(cell_w)
+                            w.setMaximumWidth(cell_w)
+                            w.setFixedWidth(cell_w)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
         
 
     def add_tasks_from_data(self, tasks_by_day):
@@ -341,7 +406,7 @@ class CalendarWidget(QWidget):
             except Exception:
                 pass
         except Exception as e:
-            print(f"Lỗi khi lấy task cá nhân: {e}")
+            logging.exception("Lỗi khi lấy task cá nhân")
         return tasks_by_day
 
     # [MỚI] Hàm để lấy task của nhóm
@@ -382,7 +447,7 @@ class CalendarWidget(QWidget):
                         'assignee_name': assignee_name,
                     })
         except Exception as e:
-            print(f"Lỗi khi lấy task nhóm: {e}")
+            logging.exception("Lỗi khi lấy task nhóm")
         return tasks_by_day
     
     def _get_user_name(self, user_id):

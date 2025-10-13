@@ -5,7 +5,7 @@ from datetime import datetime
 from PyQt5.QtWidgets import (QDialog, QFrame, QHBoxLayout, QCheckBox, QLabel, QVBoxLayout,
                              QApplication, QMenu, QInputDialog, QStyle, QPushButton,
                              QScrollArea, QWidget, QLineEdit, QDateTimeEdit, QTextEdit, QDialogButtonBox, QMessageBox,
-                             QGraphicsDropShadowEffect, QGraphicsOpacityEffect)
+                             QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QComboBox)
 from PyQt5.QtCore import Qt, QMimeData, QDate, QDateTime, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QDrag, QCursor, QFont, QColor, QFontMetrics
 from config import COLOR_WHITE, COLOR_BORDER, TEXT_MUTED, COLOR_PRIMARY, COLOR_TEXT_PRIMARY
@@ -253,11 +253,13 @@ class TaskBadge(QFrame):
         self.title = title or ''
 
         self.setContentsMargins(0, 0, 0, 0)
-        # make badges larger for readability
+        # make badges compact and cap width so long titles don't expand the calendar
         self.setFixedHeight(36)
         self.setMinimumHeight(36)
-        self.setMaximumWidth(340)
-        
+        # tighter max width to avoid extreme expansion from very long titles
+        BADGE_MAX_W = 240
+        self.setMaximumWidth(BADGE_MAX_W)
+            
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 2, 6, 2)
@@ -274,6 +276,11 @@ class TaskBadge(QFrame):
         self.label.setStyleSheet('color: white; font-size: 13px; font-weight:600;')
         self.label.setWordWrap(False)
         self.label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        try:
+            # ensure the label doesn't request excessive width
+            self.label.setMaximumWidth(BADGE_MAX_W - 40)
+        except Exception:
+            pass
         # allow widget to shrink text with elide if too long in layout (handled by QLabel width)
         layout.addWidget(self.label, 1)
 
@@ -526,7 +533,7 @@ class GroupTaskWidget(TaskWidget):
 # LỚP 5: DayWidget (Phiên bản đầy đủ và đã sửa lỗi)
 # ==============================================================================
 class AddTaskDialog(QDialog):
-    def __init__(self, parent=None, default_date: datetime = None):
+    def __init__(self, parent=None, default_date: datetime = None, members: list = None):
         super().__init__(parent)
         self.setWindowTitle("✨ Thêm công việc mới")
         self.setMinimumWidth(420)
@@ -586,6 +593,23 @@ class AddTaskDialog(QDialog):
         main_layout.addWidget(note_label)
         main_layout.addWidget(self.note_edit)
 
+        # Assignee selection: only show when members are provided.
+        # members should already be ordered with leader first by the caller.
+        if members:
+            assignee_label = QLabel("Phân công")
+            assignee_label.setStyleSheet("color: #2e7d32; font-weight:600;")
+            self.assignee_combo = QComboBox()
+            try:
+                for mid, mname in members:
+                    # add actual user_id as data
+                    self.assignee_combo.addItem(mname, mid)
+            except Exception:
+                pass
+            main_layout.addWidget(assignee_label)
+            main_layout.addWidget(self.assignee_combo)
+        else:
+            self.assignee_combo = None
+
         # Buttons
         buttons_box = QDialogButtonBox()
         ok_btn = buttons_box.addButton("Thêm", QDialogButtonBox.AcceptRole)
@@ -604,6 +628,14 @@ class AddTaskDialog(QDialog):
 
     def note(self) -> str:
         return self.note_edit.toPlainText().strip()
+
+    def assignee(self):
+        try:
+            if not self.assignee_combo:
+                return None
+            return self.assignee_combo.currentData()
+        except Exception:
+            return None
 
 
 class DayWidget(QFrame):
@@ -652,9 +684,27 @@ class DayWidget(QFrame):
     def _prompt_for_new_task(self):
         # KIỂM TRA QUYỀN TRƯỚC KHI LÀM BẤT CỨ ĐIỀU GÌ
         if self.calendar_ref and self.calendar_ref.current_view_mode == 'group':
-            # SỬA LỖI 1: So sánh ID người dùng hiện tại với ID trưởng nhóm
-            is_leader = self.calendar_ref.user_id == self.calendar_ref.current_group_leader_id
-            
+            # Ensure we have the correct leader id; some flows may not have called
+            # calendar_ref.set_group_context so current_group_leader_id can be None.
+            try:
+                leader_id = self.calendar_ref.current_group_leader_id
+                if leader_id is None:
+                    # try to resolve from the current group id
+                    try:
+                        grp = self.calendar_ref._get_current_group_id()
+                        if grp:
+                            leader_id = self.calendar_ref.db.get_group_leader(grp)
+                            # cache it on calendar_ref for subsequent checks
+                            try:
+                                self.calendar_ref.current_group_leader_id = leader_id
+                            except Exception:
+                                pass
+                    except Exception:
+                        leader_id = None
+                is_leader = (self.calendar_ref.user_id == leader_id)
+            except Exception:
+                is_leader = False
+
             # Nếu không phải là trưởng nhóm
             if not is_leader:
                 QMessageBox.warning(self, "Không có quyền", "Chỉ trưởng nhóm mới có thể thêm công việc.")
@@ -664,18 +714,31 @@ class DayWidget(QFrame):
         default_date = datetime(self.year, self.month, self.day)
         
         # SỬA LỖI 2: Truyền tham số bằng từ khóa (keyword arguments)
-        dialog = AddTaskDialog(parent=self, default_date=default_date)
-        
+        # Prepare member list (for possible assignment) — keep safe in case DB call fails
+        members = []
+        try:
+            if self.calendar_ref:
+                members = self.calendar_ref._get_current_group_members() or []
+        except Exception:
+            members = []
+
+        dialog = AddTaskDialog(parent=self, default_date=default_date, members=members)
+
         # Nếu người dùng nhấn "Thêm" và có nhập tiêu đề
         if dialog.exec_() == QDialog.Accepted and dialog.title():
             title = dialog.title()
             due_datetime_obj = dialog.due_datetime().toPyDateTime()
             note = dialog.note()
+            try:
+                assignee_id = dialog.assignee()
+            except Exception:
+                assignee_id = None
 
             if self.calendar_ref:
                 # Dựa vào chế độ xem hiện tại để quyết định thêm việc cá nhân hay nhóm
                 if self.calendar_ref.current_view_mode == 'group':
-                    self.calendar_ref.add_group_task_to_db(due_datetime_obj, title, note_text=note)
+                    # pass assignee_id (may be None or empty) to add_group_task_to_db
+                    self.calendar_ref.add_group_task_to_db(due_datetime_obj, title, assignee_id=assignee_id if assignee_id else None, note_text=note)
                 else:
                     self.calendar_ref.add_task_to_db(due_datetime_obj, title, note_text=note)
 
