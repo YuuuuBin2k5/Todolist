@@ -21,6 +21,7 @@ from Managers.database_manager import Database
 from MainMenu.home_page import DoNowView
 from MainMenu.group_dialogs import GroupSelectionDialog, MemberListDialog, AddMemberDialog
 from config import *
+import datetime
 
 
 # ==============================================================================
@@ -147,6 +148,11 @@ class MainWindow(QMainWindow):
                 self.home_widget.load_data_from_db()
         except Exception:
             pass
+        # Log initial window size after loading data for diagnostics
+        try:
+            self._log_window_size(event_note='init_load')
+        except Exception:
+            pass
 
     def initUI(self):
         """
@@ -232,6 +238,10 @@ class MainWindow(QMainWindow):
             self.vi_tri_screen()
         except Exception:
             pass
+        try:
+            self._log_window_size(event_note='show')
+        except Exception:
+            pass
 
     def closeEvent(self, event):
         """
@@ -307,6 +317,27 @@ class MainWindow(QMainWindow):
                 self.calendar_widget.switch_view_mode('group')
             except Exception:
                 pass
+        # Log size when switching to group context for diagnostics
+        try:
+            self._log_window_size(event_note=f'load_group_{self.current_group_id}')
+        except Exception:
+            pass
+
+    def _log_window_size(self, event_note=''):
+        """Append a small diagnostic record with timestamp, user and window geometry."""
+        try:
+            assets_dir = Path(os.path.dirname(os.path.dirname(__file__))) / 'assets'
+            assets_dir.mkdir(parents=True, exist_ok=True)
+            log_path = assets_dir / 'window_sizes.log'
+            w = self.frameGeometry().width()
+            h = self.frameGeometry().height()
+            now = datetime.datetime.utcnow().isoformat() + 'Z'
+            user_info = f"user_id={self.user_id};user_name={self.user_name}"
+            content = f"{now}\t{event_note}\t{user_info}\twidth={w}\theight={h}\n"
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write(content)
+        except Exception:
+            pass
     
     def _handle_personal_view(self):
         """

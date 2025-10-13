@@ -17,19 +17,28 @@ class StatItemWidget(QFrame):
         name_label = QLabel(stat_data.get('name', 'N/A'))
         name_label.setObjectName("StatNameLabel")
         
+        # Lấy dữ liệu từ 3 key mới
         completed = stat_data.get('completed', 0)
-        in_progress = stat_data.get('in_progress', 0)
-        total = completed + in_progress
+        overdue = stat_data.get('overdue', 0)
+        upcoming = stat_data.get('upcoming', 0)
+        
+        # 'in_progress' cũ bây giờ được chia thành 'overdue' và 'upcoming'
+        total = completed + overdue + upcoming
         percent = (completed / total * 100) if total > 0 else 0
         
-        stats_text = f"Hoàn thành: {completed}/{total} ({percent:.1f}%)"
+        # Cập nhật lại chuỗi hiển thị thông tin
+        stats_text = (
+            f"Tổng số Task: {total}\n"
+            f"Hoàn thành: {completed} ({percent:.1f}%)\n"
+            f"Quá hạn: {overdue}\n"
+            f"Chưa tới hạn: {upcoming}"
+        )
         stats_label = QLabel(stats_text)
         
         info_layout.addWidget(name_label)
         info_layout.addWidget(stats_label)
         info_layout.addStretch()
 
-        # Giữ kích thước biểu đồ hợp lý để nó tự co giãn trong không gian được cấp
         figure = Figure(figsize=(5, 5)) 
         canvas = FigureCanvas(figure)
         
@@ -41,21 +50,28 @@ class StatItemWidget(QFrame):
     def _draw_pie_chart(self, figure, canvas, stats_data):
         figure.clear()
         ax = figure.add_subplot(111)
-        labels = ['Hoàn thành', 'Chưa xong']
-        sizes = [stats_data.get('completed', 0), stats_data.get('in_progress', 0)]
-        colors = ['#27ae60', '#e67e22']
+        
+        # Cập nhật labels, sizes, và colors cho 3 thành phần
+        labels = ['Hoàn thành', 'Quá hạn', 'Chưa tới hạn']
+        sizes = [
+            stats_data.get('completed', 0), 
+            stats_data.get('overdue', 0), 
+            stats_data.get('upcoming', 0)
+        ]
+        # Xanh lá (hoàn thành), Đỏ (quá hạn), Vàng (sắp tới)
+        colors = ['#2ecc71', '#e74c3c', '#f1c40f']
         
         if sum(sizes) > 0:
-            ax.pie(sizes, colors=colors, autopct='%1.1f%%', startangle=90,
+            ax.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90,
                    textprops={'fontsize': 11})
         else:
-            ax.text(0.5, 0.5, 'Không có', ha='center', va='center', color='gray')
+            ax.text(0.5, 0.5, 'Không có công việc', ha='center', va='center', color='gray')
             ax.axis('off')
+            
         ax.axis('equal')
         
         figure.tight_layout()
         canvas.draw()
-
 
 class StatisticsPage(QWidget):
     def __init__(self, parent=None):

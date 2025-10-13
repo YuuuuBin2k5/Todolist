@@ -255,7 +255,9 @@ class TaskBadge(QFrame):
         self.setContentsMargins(0, 0, 0, 0)
         # make badges larger for readability
         self.setFixedHeight(36)
+        self.setMinimumHeight(36)
         self.setMaximumWidth(340)
+        
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 2, 6, 2)
@@ -633,32 +635,49 @@ class DayWidget(QFrame):
         self.tasks_layout.setAlignment(Qt.AlignTop)
         self.tasks_layout.setContentsMargins(0, 0, 0, 0)
         self.tasks_layout.setSpacing(4)  # spacing between task widgets
+        # make visible/height configurable on the instance (helps testing/user-specific cases)
+        self.MAX_VISIBLE_BADGES = 3
+        self.BADGE_HEIGHT = 36
+        spacing = max(0, self.tasks_layout.spacing())
+        visible_height = self.MAX_VISIBLE_BADGES * self.BADGE_HEIGHT + max(0, (self.MAX_VISIBLE_BADGES - 1)) * spacing + 6
+        try:
+            tasks_container.setFixedHeight(visible_height)
+        except Exception:
+            pass
 
+        # keep a reference so add_task/others can access the container and adjust if needed
+        self.tasks_container = tasks_container
         self.main_layout.addWidget(tasks_container)
             
     def _prompt_for_new_task(self):
+        # KIỂM TRA QUYỀN TRƯỚC KHI LÀM BẤT CỨ ĐIỀU GÌ
+        if self.calendar_ref and self.calendar_ref.current_view_mode == 'group':
+            # SỬA LỖI 1: So sánh ID người dùng hiện tại với ID trưởng nhóm
+            is_leader = self.calendar_ref.user_id == self.calendar_ref.current_group_leader_id
+            
+            # Nếu không phải là trưởng nhóm
+            if not is_leader:
+                QMessageBox.warning(self, "Không có quyền", "Chỉ trưởng nhóm mới có thể thêm công việc.")
+                return # Dừng hàm tại đây, không cho thực hiện thêm
+
+        # Sử dụng self.day để tạo ngày mặc định
         default_date = datetime(self.year, self.month, self.day)
-        dialog = AddTaskDialog(self, default_date=default_date)
+        
+        # SỬA LỖI 2: Truyền tham số bằng từ khóa (keyword arguments)
+        dialog = AddTaskDialog(parent=self, default_date=default_date)
+        
+        # Nếu người dùng nhấn "Thêm" và có nhập tiêu đề
         if dialog.exec_() == QDialog.Accepted and dialog.title():
             title = dialog.title()
-            due_qdt = dialog.due_datetime()
-            due_dt = datetime(due_qdt.date().year(), due_qdt.date().month(), due_qdt.date().day(),
-                              due_qdt.time().hour(), due_qdt.time().minute(), due_qdt.time().second())
+            due_datetime_obj = dialog.due_datetime().toPyDateTime()
             note = dialog.note()
 
             if self.calendar_ref:
-                if getattr(self.calendar_ref, 'current_view_mode', 'personal') == 'group':
-                    # no assignee selected from day cell; pass None
-                    try:
-                        self.calendar_ref.add_group_task_to_db(due_dt, title, None, note)
-                    except Exception:
-                        # fallback to personal task if group handling fails
-                        self.calendar_ref.add_task_to_db(due_dt, title, note)
+                # Dựa vào chế độ xem hiện tại để quyết định thêm việc cá nhân hay nhóm
+                if self.calendar_ref.current_view_mode == 'group':
+                    self.calendar_ref.add_group_task_to_db(due_datetime_obj, title, note_text=note)
                 else:
-                    self.calendar_ref.add_task_to_db(due_dt, title, note)
-            else:
-                new_task = TaskWidget(title, note=note)
-                self.add_task(new_task)
+                    self.calendar_ref.add_task_to_db(due_datetime_obj, title, note_text=note)
 
     def set_today_highlight(self, enabled=True):
         if enabled:
@@ -784,3 +803,5 @@ class DayWidget(QFrame):
         action = context_menu.exec_(self.mapToGlobal(event.pos()))
         if action == add_task_action:
             self._prompt_for_new_task()
+
+    

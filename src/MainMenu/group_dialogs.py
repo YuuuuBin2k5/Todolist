@@ -89,7 +89,22 @@ class MemberListDialog(QDialog):
         try:
             db = Database()
             members = db.get_group_members(group_id)
-            for uid, name, email in members:
+            for row in members:
+                # Support rows that are either (user_id, user_name) or (user_id, user_name, email)
+                try:
+                    uid = row[0]
+                    name = row[1] if len(row) > 1 else str(uid)
+                    email = row[2] if len(row) > 2 else None
+                except Exception:
+                    # fallback: skip malformed row
+                    continue
+                if not email:
+                    # try to fetch email from user record if missing
+                    try:
+                        user = db.get_user_by_id(uid)
+                        email = user[2] if user and len(user) > 2 else 'unknown'
+                    except Exception:
+                        email = 'unknown'
                 self.member_list.addItem(f"{name} ({email})")
         except Exception as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Không thể tải danh sách thành viên: {e}")

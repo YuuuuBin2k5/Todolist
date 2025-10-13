@@ -263,49 +263,59 @@ class Database:
 
     # Thống kê hoàn thành công việc cá nhân
     def _get_personal_completion_stats(self, user_id: int) -> Dict[str, int]:
-        """Lấy số liệu hoàn thành/chưa hoàn thành từ CSDL."""
-        stats = {'completed': 0, 'in_progress': 0}
+        """Lấy số liệu 3 trạng thái: hoàn thành, quá hạn, và sắp tới."""
+        stats = {'completed': 0, 'overdue': 0, 'upcoming': 0}
         
-        # Lấy số công việc đã hoàn thành
-        query = "SELECT COUNT(*) FROM tasks WHERE user_id = ? AND is_done = 1"
-        stats['completed'] = self._execute_query(query, (user_id,), fetch="one")[0]
-
-        # Lấy số công việc chưa hoàn thành
-        query = "SELECT COUNT(*) FROM tasks WHERE user_id = ? AND is_done = 0"
-        stats['in_progress'] = self._execute_query(query, (user_id,), fetch="one")[0]
-
-        return stats
-    
-    def _get_stats_per_group(self, user_id: int) -> List[Dict[str, int]]:
+        # Sử dụng một câu truy vấn duy nhất với CASE để tăng hiệu suất
+        query = """
+            SELECT
+                SUM(CASE WHEN is_done = 1 THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN is_done = 0 AND due_at < date('now', 'localtime') THEN 1 ELSE 0 END) as overdue,
+                SUM(CASE WHEN is_done = 0 AND due_at >= date('now', 'localtime') THEN 1 ELSE 0 END) as upcoming
+            FROM tasks
+            WHERE user_id = ?
         """
-        Lấy số liệu hoàn thành/chưa hoàn thành cho TỪNG NHÓM
-        mà người dùng hiện tại có tham gia.
-        Trả về một danh sách các dictionary.
+        
+        result = self._execute_query(query, (user_id,), fetch="one")
+        
+        if result:
+            stats['completed'] = result[0] if result[0] is not None else 0
+            stats['overdue'] = result[1] if result[1] is not None else 0
+            stats['upcoming'] = result[2] if result[2] is not None else 0
+            
+        return stats
+
+    # Thay thế hàm _get_stats_per_group cũ bằng hàm này
+    def _get_stats_per_group(self, user_id: int) -> List[Dict[str, any]]:
+        """
+        Lấy số liệu 3 trạng thái cho TỪNG NHÓM mà người dùng tham gia.
+        Trả về danh sách các dictionary.
         """
         stats_list = []
-
-        # Câu truy vấn SQL sử dụng GROUP BY để lấy số liệu cho từng nhóm
+        
+        # Cập nhật câu truy vấn để tính toán cả 3 trạng thái
         query = """
             SELECT
                 g.group_name,
-                    SUM(CASE WHEN gt.is_done = 1 THEN 1 ELSE 0 END) as completed,
-                    SUM(CASE WHEN gt.is_done = 0 THEN 1 ELSE 0 END) as in_progress
-                FROM group_tasks gt
-                JOIN groups g ON gt.group_id = g.group_id
-                WHERE gt.group_id IN (SELECT group_id FROM group_members WHERE user_id = ?)
-                GROUP BY g.group_name
-            """
-
+                SUM(CASE WHEN gt.is_done = 1 THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN gt.is_done = 0 AND gt.due_at < date('now', 'localtime') THEN 1 ELSE 0 END) as overdue,
+                SUM(CASE WHEN gt.is_done = 0 AND gt.due_at >= date('now', 'localtime') THEN 1 ELSE 0 END) as upcoming
+            FROM group_tasks gt
+            JOIN groups g ON gt.group_id = g.group_id
+            WHERE gt.group_id IN (SELECT group_id FROM group_members WHERE user_id = ?)
+            GROUP BY g.group_name
+        """
+        
         results = self._execute_query(query, (user_id,), fetch="all")
         for row in results:
-            # guard against unexpected row shapes
             if not row:
                 continue
             stats_list.append({
                 'group_name': row[0],
                 'completed': int(row[1]) if row[1] is not None else 0,
-                'in_progress': int(row[2]) if row[2] is not None else 0
+                'overdue': int(row[2]) if row[2] is not None else 0,
+                'upcoming': int(row[3]) if row[3] is not None else 0
             })
-
+            
         return stats_list
 

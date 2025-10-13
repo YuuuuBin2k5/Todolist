@@ -56,6 +56,19 @@ class ForgotPasswordDialog(QDialog):
             QPushButton:hover {{ background-color: {BTN_PRIMARY_BG_HOVER}; }}
         """)
 
+        #--- CĂN GIỮA ---
+        # Lấy thông tin hình học của màn hình chính
+        screen_geometry = QApplication.primaryScreen().geometry()
+        
+        # Lấy thông tin hình học của cửa sổ ứng dụng (bao gồm cả viền)
+        window_geometry = self.frameGeometry()
+        
+        # Di chuyển tâm của hình chữ nhật cửa sổ đến tâm của màn hình
+        window_geometry.moveCenter(screen_geometry.center())
+        
+        # Di chuyển vị trí top-left của cửa sổ đến vị trí mới đã tính toán
+        self.move(window_geometry.topLeft())
+
     # --- Bước 1: Trang nhập Email ---
     def setup_email_page(self):
         layout = QVBoxLayout(self.email_page)
