@@ -509,9 +509,12 @@ class MainWindow(QMainWindow):
                 return
             avatars_dir = Path(__file__).resolve().parents[2] / 'src' / 'assets' / 'avatars'
             avatars_dir.mkdir(parents=True, exist_ok=True)
+            # Remove any existing avatar files for this user (different extensions)
+            for old in avatars_dir.glob(f'user_{self.user_id}.*'):
+                old.unlink()
             ext = src.suffix.lower() or '.png'
             dest = avatars_dir / f'user_{self.user_id}{ext}'
-            # Overwrite existing avatar for this user
+            # Copy new avatar into place
             shutil.copyfile(str(src), str(dest))
             try:
                 # Tell side panel to show the newly saved avatar
@@ -531,7 +534,7 @@ class MainWindow(QMainWindow):
             if not avatars_dir.exists():
                 return
             # look for any extension (png/jpg/jpeg/bmp)
-            pattern = f'user_{self.user_id}.*'
+            pattern = f'user_{self.user_id}.*' 
             matches = list(avatars_dir.glob(f'user_{self.user_id}.*'))
             if not matches:
                 return
