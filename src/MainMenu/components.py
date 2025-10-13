@@ -634,13 +634,8 @@ class DayWidget(QFrame):
         self.tasks_layout.setContentsMargins(0, 0, 0, 0)
         self.tasks_layout.setSpacing(4)  # spacing between task widgets
 
-        # Add the container directly to the day cell. The add_task method
-        # already enforces a visible limit (e.g. 3 badges) and will create/update
-        # an overflow label like '+2' when there are extra tasks.
         self.main_layout.addWidget(tasks_container)
             
-
-
     def _prompt_for_new_task(self):
         default_date = datetime(self.year, self.month, self.day)
         dialog = AddTaskDialog(self, default_date=default_date)
