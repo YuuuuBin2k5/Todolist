@@ -325,18 +325,24 @@ class CalendarWidget(QWidget):
                             note_text = t.get('note', '')
                             due_at = t.get('due_at')
                             assignee_name = t.get('assignee_name', '')
-                            key = ('id', t['task_id']) if t.get('task_id') else (title, due_at, assignee_name)
+                            # Determine whether this should be treated as a group task.
+                            # In group view, all tasks come from the group table and should be rendered as group tasks
+                            # even if unassigned. Also accept an explicit 'is_group' flag from callers.
+                            is_group_flag = bool(t.get('is_group')) or (self.current_view_mode != 'personal') or bool(assignee_name)
+                            # display a friendly assignee label for unassigned group tasks
+                            assignee_display = assignee_name if assignee_name else ('Chưa phân công' if is_group_flag else '')
+                            key = ('id', t['task_id']) if t.get('task_id') else (title, due_at, assignee_display)
                             if key in seen[day]:
                                 continue
                             seen[day].add(key)
                             # create a visual badge for the calendar tile
-                            if assignee_name:
-                                badge = TaskBadge(title, color='#5c6bc0', note=note_text, assignee_name=assignee_name, parent=None, task_id=t.get('task_id'), is_group=True, calendar_ref=self)
+                            if is_group_flag:
+                                badge = TaskBadge(title, color='#5c6bc0', note=note_text, assignee_name=assignee_display, parent=None, task_id=t.get('task_id'), is_group=True, calendar_ref=self)
                                 try:
                                     # set checked state without emitting toggled signal to avoid recursion
                                     badge.checkbox.blockSignals(True)
                                     badge.checkbox.setChecked(bool(is_done))
-                                    badge.checkbox.setText('✓' if bool(is_done) else '')
+                                    badge.checkbox.setText('\u2713' if bool(is_done) else '')
                                     badge.checkbox.blockSignals(False)
                                 except Exception:
                                     pass
@@ -636,8 +642,17 @@ class CalendarWidget(QWidget):
                 due_date_str = date_obj.strftime('%Y-%m-%d')
             group_id = self._get_current_group_id()
             if group_id:
+                # ensure calendar knows current group context (leader) for permission checks
+                try:
+                    self.current_group_id = group_id
+                    if not self.current_group_leader_id:
+                        self.current_group_leader_id = self.db.get_group_leader(group_id)
+                except Exception:
+                    logging.debug("Không thể lấy leader của nhóm trước khi thêm task")
+
                 # db.add_group_task(group_id, creator_id, title, note="", is_done=0, due_at=None, assignee_id=None)
                 self.db.add_group_task(group_id, self.user_id, task_desc, note_text, 0, due_date_str, assignee_id)
+                # refresh calendar so new task appears with correct group styling
                 self.populate_calendar()
                 logging.info(f"Đã giao công việc nhóm thành công: '{task_desc}' cho user_id {assignee_id}")
             else:
@@ -650,15 +665,36 @@ class CalendarWidget(QWidget):
         """Delete a task (personal or group) by id and refresh calendar."""
         try:
             if is_group:
+                # Only group leader may delete group tasks
+                try:
+                    if not self.current_group_leader_id and self.current_group_id:
+                        self.current_group_leader_id = self.db.get_group_leader(self.current_group_id)
+                except Exception:
+                    self.current_group_leader_id = None
+                if not (self.current_group_leader_id and self.user_id == self.current_group_leader_id):
+                    # Caller will show the appropriate message; just return failure here
+                    logging.warning(f"User {self.user_id} attempted to delete group task {task_id} but is not leader")
+                    return False
                 self.db.delete_group_task(task_id)
             else:
+                # Only owner may delete personal task
+                try:
+                    data = self.db.get_task_by_id(task_id)
+                    if data:
+                        owner_id = data[1]
+                        if owner_id != self.user_id:
+                            logging.warning(f"User {self.user_id} attempted to delete personal task {task_id} owned by {owner_id}")
+                            return False
+                except Exception:
+                    pass
                 self.db.delete_task(task_id)
             # refresh
             self.populate_calendar()
             logging.info(f"Đã xóa task id={task_id} group={is_group}")
+            return True
         except Exception as e:
             logging.exception("Lỗi khi xóa task")
-
+            return False
     def update_task_status(self, task_id: int, is_done: int, is_group: bool = False):
         """Update the is_done status for a personal or group task.
 

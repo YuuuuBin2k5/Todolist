@@ -93,7 +93,19 @@ class TaskDetailItemWidget(QFrame):
         def do_delete():
             try:
                 if self.calendar_ref and task_id is not None:
-                    self.calendar_ref.delete_task(task_id, is_group=is_group)
+                    success = self.calendar_ref.delete_task(task_id, is_group=is_group)
+                    if not success:
+                        # if deletion failed, show a message and do not close
+                        QMessageBox.warning(self, 'Lỗi', 'Không thể xóa nhiệm vụ (không có quyền hoặc lỗi).')
+                    else:
+                        # close parent dialog or remove widget as appropriate
+                        try:
+                            # if this widget is inside a dialog, close dialog
+                            dlg = self.window()
+                            if isinstance(dlg, QDialog):
+                                dlg.accept()
+                        except Exception:
+                            pass
             except Exception:
                 pass
         delete_btn.clicked.connect(do_delete)
@@ -411,9 +423,16 @@ class TaskBadge(QFrame):
             pass
 
     def mouseMoveEvent(self, event):
+        # If there was no prior press that set drag_start_position, bail out safely
         if not (event.buttons() & Qt.LeftButton):
             return
-        if (event.pos() - self.drag_start_position).manhattanLength() < QApplication.startDragDistance():
+        if not hasattr(self, 'drag_start_position') or self.drag_start_position is None:
+            return
+        try:
+            if (event.pos() - self.drag_start_position).manhattanLength() < QApplication.startDragDistance():
+                return
+        except Exception:
+            # defensive fallback: if subtraction fails for any reason, do not start drag
             return
         drag = QDrag(self)
         mime_data = QMimeData()
@@ -424,6 +443,13 @@ class TaskBadge(QFrame):
         drag.setHotSpot(event.pos())
         drag.exec_(Qt.CopyAction)
 
+    def mouseReleaseEvent(self, event):
+        """Clear drag start position on mouse release to avoid stale state."""
+        try:
+            self.drag_start_position = None
+        except Exception:
+            pass
+
     def contextMenuEvent(self, event):
         context_menu = QMenu(self)
         delete_action = context_menu.addAction('Xóa công việc này')
@@ -431,10 +457,13 @@ class TaskBadge(QFrame):
         if action == delete_action:
             try:
                 if self.task_id and self.calendar_ref:
-                    self.calendar_ref.delete_task(self.task_id, self.is_group)
+                    success = self.calendar_ref.delete_task(self.task_id, self.is_group)
+                    if not success:
+                        QMessageBox.warning(self, 'Lỗi', 'Không thể xóa nhiệm vụ (không có quyền hoặc lỗi).')
+                    else:
+                        self.deleteLater()
             except Exception:
                 pass
-            self.deleteLater()
 
     def _on_checkbox_changed(self, state):
         # state may be bool (QPushButton.toggled) or int (Qt.Checked from QCheckBox)
@@ -849,10 +878,64 @@ class DayWidget(QFrame):
             note_text = source_widget.note
             full_date = datetime(self.year, self.month, self.day)
             if self.calendar_ref:
-                if getattr(self.calendar_ref, 'current_view_mode', 'personal') == 'group':
-                    self.calendar_ref.add_group_task_to_db(full_date, task_text, None, note_text)
-                else:
-                    self.calendar_ref.add_task_to_db(full_date, task_text, note_text)
+                # Create a new visual badge (do not reparent the source widget), so
+                # the immediate visual reflects the target view (group or personal).
+                try:
+                    # Determine if destination should be group: prefer explicit calendar mode or current_group_id
+                    is_group_target = getattr(self.calendar_ref, 'current_view_mode', 'personal') == 'group' or bool(getattr(self.calendar_ref, 'current_group_id', None)) or bool(getattr(source_widget, 'is_group', False))
+                    # try to extract assignee info from source if available (source may be TaskBadge/TaskWidget)
+                    assignee_id = None
+                    try:
+                        # if source has assignee_name and db can resolve, attempt resolution via calendar_ref.db
+                        assignee_name = getattr(source_widget, 'assignee_name', None)
+                        if assignee_name and self.calendar_ref and getattr(self.calendar_ref, 'db', None):
+                            try:
+                                # get_user_name returns name for id; we need inverse lookup - expensive, only when name present
+                                # best-effort: try to find user by name (not guaranteed unique)
+                                rows = self.calendar_ref.db._execute_query("SELECT user_id FROM users WHERE user_name = ?", (assignee_name,), fetch='one')
+                                if rows:
+                                    assignee_id = rows[0]
+                            except Exception:
+                                assignee_id = None
+                    except Exception:
+                        assignee_id = None
+
+                    if is_group_target:
+                        # group badge (show Unassigned label if none)
+                        assignee_display = getattr(source_widget, 'assignee_name', None) or 'Chưa phân công'
+                        badge = TaskBadge(task_text, color='#5c6bc0', note=note_text, assignee_name=assignee_display, parent=None, task_id=None, is_group=True, calendar_ref=self.calendar_ref)
+                        badge.day = self.day
+                        try:
+                            self.add_task(badge)
+                        except Exception:
+                            pass
+                        # persist to DB as group task; pass assignee_id if we resolved it
+                        try:
+                            self.calendar_ref.add_group_task_to_db(full_date, task_text, assignee_id=assignee_id, note_text=note_text)
+                        except Exception:
+                            # fallback without assignee
+                            try:
+                                self.calendar_ref.add_group_task_to_db(full_date, task_text, None, note_text)
+                            except Exception:
+                                pass
+                    else:
+                        badge = TaskBadge(task_text, color='#66bb6a', note=note_text, parent=None, task_id=None, is_group=False, calendar_ref=self.calendar_ref)
+                        badge.day = self.day
+                        try:
+                            self.add_task(badge)
+                        except Exception:
+                            pass
+                        # persist to DB as personal task
+                        self.calendar_ref.add_task_to_db(full_date, task_text, note_text)
+                except Exception:
+                    # fallback: still attempt DB persist
+                    try:
+                        if getattr(self.calendar_ref, 'current_view_mode', 'personal') == 'group':
+                            self.calendar_ref.add_group_task_to_db(full_date, task_text, None, note_text)
+                        else:
+                            self.calendar_ref.add_task_to_db(full_date, task_text, note_text)
+                    except Exception:
+                        pass
                 event.setDropAction(Qt.CopyAction)
                 event.accept()
             else:

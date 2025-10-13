@@ -297,7 +297,8 @@ class DoNowView(QWidget):
             for member_id, member_name in members:
                 self.member_selector.addItem(member_name, member_id)
         except Exception as e:
-            print(f"Lỗi khi tải danh sách thành viên: {e}")
+            import logging
+            logging.exception("Lỗi khi tải danh sách thành viên")
 
 
     def _show_priority_menu(self):
@@ -495,8 +496,15 @@ class DoNowView(QWidget):
                 )
             elif self.view_mode == 'group' and self.is_leader:
                 assignee_id = self.member_selector.currentData()
+                # Use keyword args to avoid parameter ordering bugs (creator_id must be second param)
                 self.db.add_group_task(
-                    self.group_id, title, assignee_id, note=note, is_done=0, due_at=due_at
+                    self.group_id,
+                    creator_id=self.user_id,
+                    title=title,
+                    note=note,
+                    is_done=0,
+                    due_at=due_at,
+                    assignee_id=assignee_id
                 )
             else:
                 return
@@ -505,6 +513,18 @@ class DoNowView(QWidget):
             self.note_input.clear()
             self._set_priority(4)
             self.load_data_from_db()
+            # If calendar is open in the main window, refresh it so newly-added tasks appear
+            try:
+                win = self.window()
+                cw = getattr(win, 'calendar_widget', None)
+                if cw and getattr(cw, 'current_view_mode', '') == 'group':
+                    try:
+                        cw.set_group_context(self.group_id)
+                        cw.populate_calendar()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
         except Exception as e:
             QMessageBox.critical(self, "Lỗi", f"Không thể thêm nhiệm vụ: {e}")
     
@@ -518,7 +538,21 @@ class DoNowView(QWidget):
                 self.db.update_task_status(int(task_id), int(new_status))
             elif self.view_mode == 'group':
                 self.db.update_group_task_status(int(task_id), int(new_status))
-            
+                # also refresh calendar if visible
+                try:
+                    win = self.window()
+                    cw = getattr(win, 'calendar_widget', None)
+                    if cw and getattr(cw, 'current_view_mode', '') == 'group':
+                        try:
+                            cw.refresh_day(datetime.strptime(task.get('due_at') or '', '%Y-%m-%d %H:%M:%S').day if task.get('due_at') else None)
+                        except Exception:
+                            try:
+                                cw.populate_calendar()
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+
             task['is_done'] = new_status
             self.render_tasks()
         except Exception as e:
@@ -528,14 +562,42 @@ class DoNowView(QWidget):
     def _handle_delete_task(self, task_id):
         try:
             if self.view_mode == 'personal':
+                # only owner can delete personal task
+                try:
+                    data = self.db.get_task_by_id(int(task_id))
+                    if data and data[1] != self.user_id:
+                        QMessageBox.warning(self, 'Không có quyền', 'Bạn chỉ có thể xóa nhiệm vụ của chính mình.')
+                        return
+                except Exception:
+                    pass
                 self.db.delete_task(int(task_id))
             elif self.view_mode == 'group':
+                # only group leader can delete group tasks
+                try:
+                    leader_id = self.db.get_group_leader(self.group_id)
+                    if leader_id is None or leader_id != self.user_id:
+                        QMessageBox.warning(self, 'Không có quyền', 'Chỉ trưởng nhóm mới có thể xóa công việc nhóm.')
+                        return
+                except Exception:
+                    QMessageBox.warning(self, 'Lỗi', 'Không thể kiểm tra quyền xóa.')
+                    return
                 self.db.delete_group_task(int(task_id))
             
             self.tasks = [t for t in self.tasks if t['id'] != task_id]
             if task_id in self.meta: del self.meta[task_id]
             if task_id in self.history: del self.history[task_id]
             self.render_tasks()
+            # notify calendar to refresh
+            try:
+                win = self.window()
+                cw = getattr(win, 'calendar_widget', None)
+                if cw and getattr(cw, 'current_view_mode', '') == 'group':
+                    try:
+                        cw.populate_calendar()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
         except Exception as e:
             QMessageBox.critical(self, "Lỗi", f"Không thể xóa nhiệm vụ: {e}")
 
