@@ -20,7 +20,6 @@ COLOR_SECONDARY_BLUE_PURPLE = "#673ab7"
 COLOR_GRAY = "#cccccc"
 COLOR_SHADOW = "rgba(0, 0, 0, 0.35)"
 # --- Resource paths ---
-# Path to bundled font used by the application (relative to workspace root)
 FONT_PATH = os.path.join(os.path.dirname(__file__), 'assets', 'fonts', 'BeVietnamPro-Regular.ttf')
 
 # --- Calendar / Theme colors ---
@@ -35,7 +34,7 @@ BTN_PRIMARY_BG_HOVER = "#0056b3"
 INPUT_BG = "#f3f3f3"
 TEXT_MUTED = "#555555"
 
-# --- Additional UI tokens discovered in home_page.py ---
+# --- UI components in home_page.py ---
 # Icon directory (absolute path to assets/icons)
 ICON_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'icons'))
 

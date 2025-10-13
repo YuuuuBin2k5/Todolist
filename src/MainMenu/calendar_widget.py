@@ -8,7 +8,10 @@ from PyQt5.QtGui import QFontDatabase, QFont
 from PyQt5.QtCore import Qt
 from MainMenu.components import DayWidget, TaskWidget, GroupTaskWidget, TaskBadge
 from Managers.database_manager import Database
-from config import CALENDAR_BG_GRADIENT_START, CALENDAR_BG_GRADIENT_END, CALENDAR_MONTH_PILL_START, CALENDAR_MONTH_PILL_END, FONT_PATH
+from config import (
+    CALENDAR_BG_GRADIENT_START, CALENDAR_BG_GRADIENT_END, CALENDAR_MONTH_PILL_START, 
+    CALENDAR_MONTH_PILL_END, FONT_PATH
+)
 
 calendar.setfirstweekday(calendar.SUNDAY)
 
@@ -19,12 +22,6 @@ VIETNAMESE_MONTHS = [
 
 class CalendarWidget(QWidget):
     def __init__(self, user_id, db=None, parent=None):
-        # Signature: (user_id, db=None, parent=None)
-        # Accept a Database instance as the second (keyword) argument. If a
-        # Database isn't provided, create a local one. Avoid treating a
-        # Database object as the QWidget parent (was the source of the
-        # unexpected-type error during login where Database was passed
-        # positionally as the parent).
         super().__init__(parent)
         self.user_id = user_id
         self.db = Database()

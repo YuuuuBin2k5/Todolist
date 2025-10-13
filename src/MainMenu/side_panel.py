@@ -29,6 +29,9 @@ class SidePanel(QFrame):
     member_list_requested = pyqtSignal()
     add_member_requested = pyqtSignal()
 
+    # Tín hiệu phát ra khi yêu cầu xem thống kê
+    statistics_requested = pyqtSignal()
+
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -110,6 +113,11 @@ class SidePanel(QFrame):
         self.calendar_button.setObjectName("CalendarButton")
         self.layout.addWidget(self.calendar_button)
 
+        #Vi
+        self.statistics_button = QPushButton("Thống kê")
+        self.statistics_button.setObjectName("StatisticsButton") # Đặt tên để có thể style bằng CSS
+        self.layout.addWidget(self.statistics_button)
+
         # --- Khoảng trống giãn nở để đẩy nút Exit xuống dưới ---
         spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.layout.addItem(spacer)
@@ -127,6 +135,7 @@ class SidePanel(QFrame):
         self.exit_button.clicked.connect(self.exit_requested.emit)
         self.member_list_btn.clicked.connect(self.member_list_requested.emit)
         self.add_member_btn.clicked.connect(self.add_member_requested.emit)
+        self.statistics_button.clicked.connect(self.statistics_requested.emit)
         
         self.update_view('personal')
 

@@ -13,10 +13,12 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QDateTime
 from PyQt5.QtGui import QIcon, QColor
 
-from config import ICON_DIR, COLOR_BACKGROUND, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_DANGER, COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY, COLOR_BORDER, COLOR_HOVER, PRIORITY_COLORS
-# COLOR_WHITE is provided by config.py as COLOR_WHITE
-from config import COLOR_WHITE
-
+from config import (
+    ICON_DIR, COLOR_BACKGROUND, COLOR_PRIMARY, 
+    COLOR_SUCCESS, COLOR_DANGER, COLOR_TEXT_PRIMARY, 
+    COLOR_TEXT_SECONDARY, COLOR_BORDER, COLOR_HOVER, 
+    PRIORITY_COLORS, COLOR_WHITE
+)
 
 def _parse_iso_datetime_module(s: str):
     """Module-level ISO datetime parser usable by widgets in this file."""

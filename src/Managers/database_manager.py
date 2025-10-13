@@ -1,7 +1,6 @@
 import os
 import sqlite3
-from typing import List, Optional, Any, Tuple
-
+from typing import List, Optional, Tuple, Dict
 
 class Database:
     """Trợ giúp SQLite cho app: users, tasks, groups, group_members, group_tasks.
@@ -252,4 +251,52 @@ class Database:
         res = self.get_user_by_id(user_id)
         return res[1] if res else None
 
+
+    # Thống kê hoàn thành công việc cá nhân
+    def _get_personal_completion_stats(self, user_id: int) -> Dict[str, int]:
+        """Lấy số liệu hoàn thành/chưa hoàn thành từ CSDL."""
+        stats = {'completed': 0, 'in_progress': 0}
+        
+        # Lấy số công việc đã hoàn thành
+        query = "SELECT COUNT(*) FROM tasks WHERE user_id = ? AND is_done = 1"
+        stats['completed'] = self._execute_query(query, (user_id,), fetch="one")[0]
+
+        # Lấy số công việc chưa hoàn thành
+        query = "SELECT COUNT(*) FROM tasks WHERE user_id = ? AND is_done = 0"
+        stats['in_progress'] = self._execute_query(query, (user_id,), fetch="one")[0]
+
+        return stats
+    
+    def _get_stats_per_group(self, user_id: int) -> List[Dict[str, int]]:
+        """
+        Lấy số liệu hoàn thành/chưa hoàn thành cho TỪNG NHÓM
+        mà người dùng hiện tại có tham gia.
+        Trả về một danh sách các dictionary.
+        """
+        stats_list = []
+
+        # Câu truy vấn SQL sử dụng GROUP BY để lấy số liệu cho từng nhóm
+        query = """
+            SELECT
+                g.group_name,
+                    SUM(CASE WHEN gt.is_done = 1 THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN gt.is_done = 0 THEN 1 ELSE 0 END) as in_progress
+                FROM group_tasks gt
+                JOIN groups g ON gt.group_id = g.group_id
+                WHERE gt.group_id IN (SELECT group_id FROM group_members WHERE user_id = ?)
+                GROUP BY g.group_name
+            """
+
+        results = self._execute_query(query, (user_id,), fetch="all")
+        for row in results:
+            # guard against unexpected row shapes
+            if not row:
+                continue
+            stats_list.append({
+                'group_name': row[0],
+                'completed': int(row[1]) if row[1] is not None else 0,
+                'in_progress': int(row[2]) if row[2] is not None else 0
+            })
+
+        return stats_list
 

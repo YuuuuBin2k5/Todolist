@@ -4,18 +4,15 @@
     Đây là file đã được hợp nhất từ hai phiên bản có xung đột.
 """
 
-import os
-import sys
-import json
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout, 
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, 
                              QVBoxLayout, QLabel, QMessageBox, QFileDialog, 
                              QSizePolicy, QStackedWidget, QDialog)
-from PyQt5.QtGui import QFont, QFontDatabase
-from PyQt5.QtCore import QDateTime, QDate, Qt
+from PyQt5.QtCore import QDate, Qt
 
 # Import các lớp widget đã được module hóa từ các file khác
 from MainMenu.side_panel import SidePanel
 from MainMenu.calendar_widget import CalendarWidget
+from MainMenu.statistics_page import StatisticsPage
 from Managers.database_manager import Database
 from MainMenu.home_page import DoNowView
 from MainMenu.group_dialogs import GroupSelectionDialog, MemberListDialog, AddMemberDialog
@@ -212,6 +209,10 @@ class MainWindow(QMainWindow):
         self.home_widget = DoNowView(self.user_id, db=self.db)
         self.content_stack.addWidget(self.home_widget)
 
+        #Khu vực thống kê
+        self.statistics_page = StatisticsPage()
+        self.content_stack.addWidget(self.statistics_page)
+
         # Khu vực lịch
         # Use the shared Database helper and pass it to CalendarWidget
         self.calendar_widget = CalendarWidget(self.user_id, self.db)
@@ -228,6 +229,7 @@ class MainWindow(QMainWindow):
         self.side_panel.exit_requested.connect(self._prompt_for_exit)
         self.side_panel.member_list_requested.connect(self._show_member_list)
         self.side_panel.add_member_requested.connect(self._add_member)
+        self.side_panel.statistics_requested.connect(self.show_statistics_page)
 
     def _load_group_context(self, group_id, group_name):
         self.current_view = 'group'
@@ -428,3 +430,24 @@ class MainWindow(QMainWindow):
             self.calendar_widget.populate_calendar(tasks_by_day)
         except Exception as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Lỗi khi tải công việc nhóm: {e}")
+
+    def show_statistics_page(self):
+        """
+        Hiển thị trang thống kê công việc cá nhân VÀ chi tiết từng nhóm.
+        """
+        print("Chuyển sang trang Thống kê chi tiết...")
+        
+        if self.current_view != 'personal':
+            self._handle_personal_view()
+
+        # 1. Lấy dữ liệu thống kê cá nhân
+        personal_stats_data = self.db._get_personal_completion_stats(self.user_id)
+
+        # 2. Lấy danh sách dữ liệu thống kê của từng nhóm
+        group_stats_list = self.db._get_stats_per_group(self.user_id)
+
+        # 3. Cập nhật toàn bộ giao diện thống kê
+        self.statistics_page.update_all_stats(personal_stats_data, group_stats_list)
+        
+        # 4. Hiển thị trang thống kê
+        self.content_stack.setCurrentWidget(self.statistics_page)
