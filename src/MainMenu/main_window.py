@@ -560,30 +560,8 @@ class MainWindow(QMainWindow):
                         tasks_by_day[day].append({'task_id': task_id, 'title': title, 'is_done': is_done, 'note': note, 'due_at': due_at_str})
 
             # Also include group tasks assigned to this user in the same month
-            try:
-                month_str = self.calendar_widget.current_date.strftime('%Y-%m')
-                group_tasks = self.db.get_group_tasks_for_user_month(self.user_id, month_str)
-                for gt in group_tasks:
-                    # gt: (task_id, group_id, assignee_id, title, note, is_done, due_at)
-                    g_task_id, g_group_id, g_assignee_id, g_title, g_note, g_is_done, g_due_at = gt
-                    if g_due_at:
-                        g_date = QDate.fromString(g_due_at[:10], "yyyy-MM-dd")
-                        if g_date.year() == self.calendar_widget.current_date.year and g_date.month() == self.calendar_widget.current_date.month:
-                            g_day = g_date.day()
-                            if g_day not in tasks_by_day:
-                                tasks_by_day[g_day] = []
-                            assignee_name = self.db.get_user_name(g_assignee_id) or "Chưa phân công"
-                            tasks_by_day[g_day].append({
-                                'task_id': g_task_id,
-                                'title': g_title,
-                                'is_done': g_is_done,
-                                'note': g_note,
-                                'due_at': g_due_at,
-                                'assignee_name': assignee_name
-                            })
-            except Exception:
-                pass
-
+            # Personal view should display only personal tasks.
+            # Do not include group tasks here; group tasks are displayed via the group view.
             self.calendar_widget.populate_calendar(tasks_by_day)
         except Exception as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Lỗi khi tải công việc cá nhân: {e}")
@@ -596,9 +574,19 @@ class MainWindow(QMainWindow):
         try:
             month_str = self.calendar_widget.current_date.strftime('%Y-%m')
             all_tasks = self.db.get_group_tasks_for_month(group_id, month_str)
+            # Determine whether current user is leader of this group
+            try:
+                leader_id = self.db.get_group_leader(group_id)
+            except Exception:
+                leader_id = None
+
             for task in all_tasks:
                 # (task_id, group_id, assignee_id, title, note, is_done, due_at)
                 task_id, group_id, assignee_id, title, note, is_done, due_at_str = task
+                # If current user is not leader, only include tasks assigned to this user
+                if leader_id is None or self.user_id != leader_id:
+                    if assignee_id is None or assignee_id != self.user_id:
+                        continue
                 if due_at_str:
                     task_date = QDate.fromString(due_at_str[:10], "yyyy-MM-dd")
                     if task_date.year() == self.calendar_widget.current_date.year and \

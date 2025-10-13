@@ -387,30 +387,8 @@ class CalendarWidget(QWidget):
                         'assignee_id': None,
                         'assignee_name': None,
                     })
-            # Additionally include any group tasks assigned to this user in the same month
-            try:
-                group_tasks = self.db.get_group_tasks_for_user_month(self.user_id, month_str)
-                for gt in group_tasks:
-                    # gt: (task_id, group_id, assignee_id, title, note, is_done, due_at)
-                    g_task_id, g_group_id, g_assignee_id, g_title, g_note, g_is_done, g_due_at = gt
-                    if g_due_at:
-                        g_dt = self._parse_iso_datetime(g_due_at)
-                        if not g_dt:
-                            continue
-                        g_day = g_dt.day
-                        if g_day not in tasks_by_day:
-                            tasks_by_day[g_day] = []
-                        tasks_by_day[g_day].append({
-                            'task_id': g_task_id,
-                            'title': g_title,
-                            'is_done': bool(g_is_done),
-                            'note': g_note,
-                            'due_at': g_due_at,
-                            'assignee_id': g_assignee_id,
-                            'assignee_name': self.db.get_user_name(g_assignee_id) if g_assignee_id else 'Chưa phân công',
-                        })
-            except Exception:
-                pass
+            # Note: Personal view only shows personal tasks (not group tasks).
+            # Group tasks assigned to the user are shown in group view when appropriate.
         except Exception as e:
             logging.exception("Lỗi khi lấy task cá nhân")
         return tasks_by_day
@@ -430,8 +408,18 @@ class CalendarWidget(QWidget):
 
             all_tasks = self.db.get_group_tasks_for_month(group_id, month_str)
             # all_tasks: list of tuples (task_id, group_id, assignee_id, title, note, is_done, due_at)
+            # Determine whether current user is leader of this group
+            try:
+                leader_id = self.db.get_group_leader(group_id)
+            except Exception:
+                leader_id = None
+
             for task_data in all_tasks:
                 task_id, g_group_id, assignee_id, title, note, is_done_int, due_at_str = task_data
+                # If current user is not leader, only include tasks assigned to this user
+                if leader_id is None or self.user_id != leader_id:
+                    if assignee_id is None or assignee_id != self.user_id:
+                        continue
                 if due_at_str:
                     dt = self._parse_iso_datetime(due_at_str)
                     if not dt:

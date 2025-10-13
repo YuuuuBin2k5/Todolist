@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import re
 import sys
 import os
 import sqlite3
@@ -69,6 +70,23 @@ class ForgotPasswordDialog(QDialog):
         
         # Di chuyển vị trí top-left của cửa sổ đến vị trí mới đã tính toán
         self.move(window_geometry.topLeft())
+
+    def _is_password_strong(self, password: str) -> tuple[bool, str]:
+        """
+        Kiểm tra độ mạnh của mật khẩu.
+        Trả về (True, "") nếu mật khẩu mạnh, ngược lại (False, "lý do lỗi").
+        """
+        if len(password) < 8:
+            return False, "Mật khẩu phải có ít nhất 8 ký tự."
+        if not re.search(r"[A-Z]", password):
+            return False, "Mật khẩu phải chứa ít nhất một chữ viết hoa."
+        if not re.search(r"[a-z]", password):
+            return False, "Mật khẩu phải chứa ít nhất một chữ viết thường."
+        if not re.search(r"\d", password):
+            return False, "Mật khẩu phải chứa ít nhất một chữ số."
+        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+            return False, "Mật khẩu phải chứa ít nhất một ký tự đặc biệt."
+        return True, ""
 
     # --- Bước 1: Trang nhập Email ---
     def setup_email_page(self):

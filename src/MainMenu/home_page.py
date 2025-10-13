@@ -381,9 +381,18 @@ class DoNowView(QWidget):
                         "note": r[6] if len(r) > 6 else ""
                     })
             elif self.view_mode == 'group' and self.group_id:
+                # leader sees all tasks; members see only tasks assigned to them
+                try:
+                    leader_id = self.db.get_group_leader(self.group_id)
+                except Exception:
+                    leader_id = None
                 rows = self.db.get_group_tasks(self.group_id)
                 for r in rows:
                     assignee_id = r[2]
+                    # if not leader and task is not assigned to current user, skip
+                    if leader_id is None or self.user_id != leader_id:
+                        if assignee_id is None or assignee_id != self.user_id:
+                            continue
                     assignee_name = self.db.get_user_name(assignee_id) if assignee_id else "Unassigned"
                     self.tasks.append({
                         "id": str(r[0]), "title": r[3], "note": r[4],
