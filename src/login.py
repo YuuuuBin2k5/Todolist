@@ -23,7 +23,7 @@ class ForgotPasswordDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Quên Mật Khẩu")
-        self.setFixedSize(400, 300)
+        self.setFixedSize(400, 350) # Tăng chiều cao để có không gian
         self.setObjectName("ForgotPasswordDialog")
         
         # Biến để lưu trữ thông tin qua các bước
@@ -56,22 +56,43 @@ class ForgotPasswordDialog(QDialog):
             }}
             QPushButton:hover {{ background-color: {BTN_PRIMARY_BG_HOVER}; }}
         """)
-    def _is_password_strong(self, password: str) -> tuple[bool, str]:
+    def _evaluate_password_strength_detailed(self, password: str) -> tuple[str, str, list]:
         """
-        Kiểm tra độ mạnh của mật khẩu.
-        Trả về (True, "") nếu mật khẩu mạnh, ngược lại (False, "lý do lỗi").
+        Đánh giá chi tiết độ mạnh của mật khẩu.
+        Trả về: (trạng thái, màu sắc, danh sách tiêu chí còn thiếu).
         """
-        if len(password) < 8:
-            return False, "Mật khẩu phải có ít nhất 8 ký tự."
-        if not re.search(r"[A-Z]", password):
-            return False, "Mật khẩu phải chứa ít nhất một chữ viết hoa."
-        if not re.search(r"[a-z]", password):
-            return False, "Mật khẩu phải chứa ít nhất một chữ viết thường."
-        if not re.search(r"\d", password):
-            return False, "Mật khẩu phải chứa ít nhất một chữ số."
-        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
-            return False, "Mật khẩu phải chứa ít nhất một ký tự đặc biệt."
-        return True, ""
+        if not password:
+            return ("", "transparent", [])
+
+        missing_criteria = []
+        if len(password) < 8: missing_criteria.append("Ít nhất 8 ký tự")
+        if not re.search(r"[A-Z]", password): missing_criteria.append("Một chữ hoa")
+        if not re.search(r"[a-z]", password): missing_criteria.append("Một chữ thường")
+        if not re.search(r"\d", password): missing_criteria.append("Một chữ số")
+        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password): missing_criteria.append("Một ký tự đặc biệt")
+
+        if not missing_criteria:
+            return ("Rất mạnh", "green", [])
+        elif len(missing_criteria) <= 2:
+            return ("Trung bình", "#f39c12", missing_criteria) # Màu cam
+        else:
+            return ("Yếu", "red", missing_criteria)
+
+    def _update_password_strength_indicator(self, password: str):
+        """
+        Cập nhật QLabel hiển thị độ mạnh và các yêu cầu còn thiếu.
+        """
+        strength_text, color, missing = self._evaluate_password_strength_detailed(password)
+        
+        display_text = strength_text
+        if missing:
+            details = ", ".join(missing)
+            display_text += f" (Còn thiếu: {details})"
+            
+        self.password_strength_label.setText(display_text)
+        self.password_strength_label.setStyleSheet(f"color: {color}; font-size: 11px; margin-top: 5px;")
+        self.password_strength_label.setWordWrap(True)
+        
     # --- Bước 1: Trang nhập Email ---
     def setup_email_page(self):
         layout = QVBoxLayout(self.email_page)
@@ -120,13 +141,21 @@ class ForgotPasswordDialog(QDialog):
         self.confirm_password_input = QLineEdit(placeholderText="Xác nhận mật khẩu mới")
         self.confirm_password_input.setEchoMode(QLineEdit.Password)
         
+        self.password_strength_label = QLabel("")
+        self.password_strength_label.setMinimumHeight(30) # Đảm bảo có không gian hiển thị
+
         reset_btn = QPushButton("Đặt lại mật khẩu")
         reset_btn.clicked.connect(self.handle_reset_password)
         
         layout.addWidget(title)
         layout.addWidget(self.new_password_input)
         layout.addWidget(self.confirm_password_input)
+        layout.addWidget(self.password_strength_label)
         layout.addWidget(reset_btn)
+
+        # Kết nối sự kiện `textChanged` để cập nhật chỉ báo
+        self.new_password_input.textChanged.connect(self._update_password_strength_indicator)
+
 
     # --- Logic xử lý ---
     def handle_send_code(self):
@@ -134,7 +163,7 @@ class ForgotPasswordDialog(QDialog):
         if not self.email:
             QMessageBox.warning(self, "Lỗi", "Vui lòng nhập email.")
             return
-        # Kiểm tra email có tồn tại trong CSDL không (dùng Database helper)
+        # Kiểm tra email có tồn tại trong CSDL không
         try:
             db = Database()
             user = db.get_user_by_email(self.email)
@@ -172,6 +201,13 @@ class ForgotPasswordDialog(QDialog):
             QMessageBox.warning(self, "Lỗi", "Mật khẩu xác nhận không khớp.")
             return
             
+        # Kiểm tra độ mạnh mật khẩu trước khi cập nhật
+        strength, _, missing = self._evaluate_password_strength_detailed(new_password)
+        if strength != "Rất mạnh":
+            error_message = "Mật khẩu chưa đủ mạnh.\nVui lòng đáp ứng các yêu cầu sau:\n\n- " + "\n- ".join(missing)
+            QMessageBox.warning(self, "Mật khẩu yếu", error_message)
+            return
+
         # Cập nhật mật khẩu trong CSDL
         try:
             db = Database()
@@ -181,25 +217,17 @@ class ForgotPasswordDialog(QDialog):
         except Exception as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Không thể cập nhật mật khẩu: {e}")
 
-    # ======================================================================================
-    # HÀM CHỜ: BẠN CẦN ĐIỀN THÔNG TIN GỬI EMAIL CỦA BẠN VÀO ĐÂY
-    # ======================================================================================
     def send_verification_email(self, recipient_email, code):
         """
         Đây là nơi bạn sẽ triển khai logic gửi email.
-        Sử dụng smtplib và mật khẩu ứng dụng của bạn.
-        Trả về True nếu gửi thành công, False nếu thất bại.
         """
-        # THAY THẾ CÁC THÔNG TIN NÀY BẰNG THÔNG TIN CỦA BẠN
-        email_sender = 'your_email@gmail.com'  # Email của bạn
-        email_password = 'your_app_password'     # Mật khẩu ứng dụng 16 ký tự
+        email_sender = 'your_email@gmail.com'
+        email_password = 'your_app_password'
 
         if email_sender == 'your_email@gmail.com' or email_password == 'your_app_password':
             print("!!! VUI LÒNG CẤU HÌNH EMAIL VÀ MẬT KHẨU ỨNG DỤNG TRONG HÀM send_verification_email !!!")
-            # Giả lập gửi email thành công để test giao diện
             return True 
         
-        # --- Logic gửi email thật ---
         email_receiver = recipient_email
         subject = 'Mã xác thực đặt lại mật khẩu của bạn'
         body = f"Mã xác thực của bạn là: {code}"
@@ -209,7 +237,6 @@ class ForgotPasswordDialog(QDialog):
         em['To'] = email_receiver
         em['Subject'] = subject
         em.set_content(body)
-
         context = ssl.create_default_context()
 
         try:
@@ -221,7 +248,6 @@ class ForgotPasswordDialog(QDialog):
             print(f"Lỗi gửi email: {e}")
             QMessageBox.critical(self, "Lỗi", "Không thể gửi email xác thực.")
             return False
-
 # ==========================================================================================
 # CẬP NHẬT LỚP LoginRegisterApp
 # ==========================================================================================
