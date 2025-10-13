@@ -450,6 +450,11 @@ class MainWindow(QMainWindow):
         # Cập nhật dữ liệu cho trang hiện tại
         if self.current_content == 'home':
             self.home_widget.user_id = self.user_id
+            # Ensure home page is reset to personal context and reload data
+            try:
+                self.home_widget.set_view_context(mode='personal')
+            except Exception:
+                pass
             self.home_widget.load_data_from_db()
         elif self.current_content == 'calendar':
             # Ensure calendar knows we're in personal mode
