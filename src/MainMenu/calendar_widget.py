@@ -539,7 +539,7 @@ class CalendarWidget(QWidget):
                                     badge.label.setStyleSheet('color:#fff; text-decoration: line-through; font-size:11px;')
                                 day_widget.add_task(badge)
                     except Exception as e:
-                        print(f"Lỗi khi hiển thị task: {e}")
+                        logging.exception("Lỗi khi hiển thị task")
                         
     # ... (các hàm còn lại như clear_calendar, setup_week_headers, prev_month, next_month giữ nguyên) ...
     def clear_calendar(self):
@@ -588,10 +588,10 @@ class CalendarWidget(QWidget):
             
             # Sau khi thêm thành công, vẽ lại lịch để hiển thị công việc mới
             self.populate_calendar()
-            print(f"Đã thêm công việc cá nhân thành công: '{task_desc}' vào ngày {due_date_str}")
+            logging.info(f"Đã thêm công việc cá nhân thành công: '{task_desc}' vào ngày {due_date_str}")
 
         except Exception as e:
-            print(f"Lỗi khi thêm công việc cá nhân vào database: {e}")
+            logging.exception("Lỗi khi thêm công việc cá nhân vào database")
 
     def open_day_detail(self, day: int):
         """Open DayDetailDialog for the given day (uses self.current_date year/month)."""
@@ -623,7 +623,7 @@ class CalendarWidget(QWidget):
             dialog = DayDetailDialog(full_date, tasks_data, calendar_ref=self)
             dialog.exec_()
         except Exception as e:
-            print(f"Lỗi khi mở chi tiết ngày: {e}")
+            logging.exception("Lỗi khi mở chi tiết ngày")
 
     def add_group_task_to_db(self, date_obj, task_desc, assignee_id=None, note_text=""):
         """
@@ -639,12 +639,12 @@ class CalendarWidget(QWidget):
                 # db.add_group_task(group_id, creator_id, title, note="", is_done=0, due_at=None, assignee_id=None)
                 self.db.add_group_task(group_id, self.user_id, task_desc, note_text, 0, due_date_str, assignee_id)
                 self.populate_calendar()
-                print(f"Đã giao công việc nhóm thành công: '{task_desc}' cho user_id {assignee_id}")
+                logging.info(f"Đã giao công việc nhóm thành công: '{task_desc}' cho user_id {assignee_id}")
             else:
-                print(f"Lỗi: Người dùng {self.user_id} không thuộc nhóm nào.")
+                logging.warning(f"Người dùng {self.user_id} không thuộc nhóm nào.")
 
         except Exception as e:
-            print(f"Lỗi khi thêm công việc nhóm vào database: {e}")
+            logging.exception("Lỗi khi thêm công việc nhóm vào database")
 
     def delete_task(self, task_id: int, is_group: bool = False):
         """Delete a task (personal or group) by id and refresh calendar."""
@@ -655,9 +655,9 @@ class CalendarWidget(QWidget):
                 self.db.delete_task(task_id)
             # refresh
             self.populate_calendar()
-            print(f"Đã xóa task id={task_id} group={is_group}")
+            logging.info(f"Đã xóa task id={task_id} group={is_group}")
         except Exception as e:
-            print(f"Lỗi khi xóa task: {e}")
+            logging.exception("Lỗi khi xóa task")
 
     def update_task_status(self, task_id: int, is_done: int, is_group: bool = False):
         """Update the is_done status for a personal or group task.
@@ -674,10 +674,10 @@ class CalendarWidget(QWidget):
             else:
                 self.db.update_task_status(task_id, is_done)
             # Do not call populate_calendar here to avoid full redraw; caller should call refresh_day(day)
-            print(f"Cập nhật trạng thái task id={task_id} group={is_group} -> is_done={is_done}")
+            logging.info(f"Cập nhật trạng thái task id={task_id} group={is_group} -> is_done={is_done}")
             return True
         except Exception as e:
-            print(f"Lỗi khi cập nhật trạng thái task: {e}")
+            logging.exception("Lỗi khi cập nhật trạng thái task")
             return False
 
     def refresh_day(self, day: int):
@@ -701,7 +701,7 @@ class CalendarWidget(QWidget):
             # delegate to _display_tasks which handles clearing/adding for days present in dict
             self._display_tasks(tasks_for_day)
         except Exception as e:
-            print(f"Lỗi khi refresh day {day}: {e}")
+            logging.exception(f"Lỗi khi refresh day {day}")
 
     def can_toggle_task(self, task_id: int, is_group: bool = False) -> tuple:
         """Check whether the current user is allowed to toggle the given task.
@@ -734,5 +734,5 @@ class CalendarWidget(QWidget):
                     return True, ""
                 return False, "Bạn chỉ có thể thay đổi công việc của chính mình."
         except Exception as e:
-            print(f"Lỗi khi kiểm tra quyền toggle task: {e}")
-            return False, "Lỗi kiểm tra quyền." 
+            logging.exception("Lỗi khi kiểm tra quyền toggle task")
+            return False, "Lỗi kiểm tra quyền."

@@ -12,6 +12,7 @@ from PyQt5.QtCore import Qt, QPropertyAnimation, QPoint
 # [THAY ĐỔI] Thêm QFont vào đây
 from PyQt5.QtGui import QPixmap, QFont 
 from config import *
+import logging
 from MainMenu.main_window import MainWindow
 from Managers.database_manager import Database
 
@@ -144,7 +145,7 @@ class ForgotPasswordDialog(QDialog):
 
         # Tạo mã và gửi email
         self.verification_code = str(random.randint(100000, 999999))
-        print(f"Generated code for {self.email}: {self.verification_code}") # In ra để debug
+        logging.debug(f"Generated code for {self.email}: {self.verification_code}")
         
         if self.send_verification_email(self.email, self.verification_code):
             QMessageBox.information(self, "Thành công", f"Mã xác thực đã được gửi tới {self.email}.")
@@ -192,7 +193,7 @@ class ForgotPasswordDialog(QDialog):
         email_password = 'your_app_password'     # Mật khẩu ứng dụng 16 ký tự
 
         if email_sender == 'your_email@gmail.com' or email_password == 'your_app_password':
-            print("!!! VUI LÒNG CẤU HÌNH EMAIL VÀ MẬT KHẨU ỨNG DỤNG TRONG HÀM send_verification_email !!!")
+            logging.warning("!!! VUI LÒNG CẤU HÌNH EMAIL VÀ MẬT KHẨU ỨNG DỤNG TRONG HÀM send_verification_email !!!")
             # Giả lập gửi email thành công để test giao diện
             return True 
         
@@ -215,7 +216,7 @@ class ForgotPasswordDialog(QDialog):
                 smtp.sendmail(email_sender, email_receiver, em.as_string())
             return True
         except Exception as e:
-            print(f"Lỗi gửi email: {e}")
+            logging.exception("Lỗi gửi email")
             QMessageBox.critical(self, "Lỗi", "Không thể gửi email xác thực.")
             return False
 
@@ -287,16 +288,6 @@ class LoginRegisterApp(QMainWindow):
         social_layout = QHBoxLayout()
         social_layout.setAlignment(Qt.AlignCenter)
         social_layout.setSpacing(10)
-        social_icons = ["assets/images/google_icon.png", "assets/images/facebook_icon.png", "assets/images/instagram_icon.png", "assets/images/github_icon.png"]
-        for icon_path in social_icons:
-            icon_label = QLabel()
-            icon_pixmap = QPixmap(icon_path)
-            icon_pixmap_scaled = icon_pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            icon_label.setPixmap(icon_pixmap_scaled)
-            icon_label.setFixedSize(40, 40)
-            icon_label.setAlignment(Qt.AlignCenter)
-            icon_label.setStyleSheet(f"border: 1px solid {COLOR_GRAY}; border-radius: 20px;")
-            social_layout.addWidget(icon_label)
         layout.addLayout(social_layout)
         subtitle_label = QLabel(f"<p>{subtitle}</p>")
         subtitle_label.setStyleSheet(f"font-size: 14px; color: {TEXT_MUTED};")

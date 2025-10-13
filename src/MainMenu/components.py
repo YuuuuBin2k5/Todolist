@@ -14,7 +14,8 @@ from config import COLOR_WHITE, COLOR_BORDER, TEXT_MUTED, COLOR_PRIMARY, COLOR_T
 try:
     locale.setlocale(locale.LC_TIME, 'vi_VN.UTF-8')
 except locale.Error:
-    print("Locale vi_VN not supported, skipping.")
+    import logging
+    logging.debug("Locale vi_VN not supported, skipping.")
 
 VIETNAMESE_DAYS = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"]
 VIETNAMESE_MONTHS = [

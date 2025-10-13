@@ -37,7 +37,8 @@ class Database:
             if fetch == "all":
                 return cur.fetchall()
         except sqlite3.Error as e:
-            print(f"[DB ERROR] {e} | {query} {params}")
+            import logging
+            logging.exception("[DB ERROR] %s | %s %s", e, query, params)
         finally:
             conn.close()
 
@@ -56,7 +57,8 @@ class Database:
             conn.close()
             return last
         except sqlite3.Error as e:
-            print(f"[DB ERROR] {e} | {query} {params}")
+            import logging
+            logging.exception("[DB ERROR] %s | %s %s", e, query, params)
             try:
                 cur.close()
             except Exception:

@@ -12,6 +12,7 @@ from PyQt5.QtGui import QGuiApplication
 import shutil
 from pathlib import Path
 import os
+import logging
 
 # --- Nhập các module và widget tùy chỉnh của dự án ---
 from MainMenu.side_panel import SidePanel
@@ -428,7 +429,7 @@ class MainWindow(QMainWindow):
                 f.write(content)
             # also echo to stdout so running the app shows the record in console
             try:
-                print('WINDOW_LOG:', content.strip())
+                logging.debug('WINDOW_LOG: %s', content.strip())
             except Exception:
                 pass
         except Exception:
@@ -438,7 +439,7 @@ class MainWindow(QMainWindow):
         """
             Xử lý việc chuyển đổi sang chế độ xem cá nhân.
         """
-        print("Chuyển sang khu vực cá nhân...")
+        logging.debug("Chuyển sang khu vực cá nhân...")
         self.current_view = 'personal'
         self.current_group_id = None # Reset thông tin nhóm
         self.is_leader_of_current_group = False
@@ -463,7 +464,7 @@ class MainWindow(QMainWindow):
             Xử lý việc chuyển đổi sang chế độ xem nhóm.
             Mở hộp thoại để người dùng chọn nhóm.
         """
-        print("Chuyển sang khu vực nhóm...")
+        logging.debug("Chuyển sang khu vực nhóm...")
         dialog = GroupSelectionDialog(self.user_id, self)
         if dialog.exec_() == QDialog.Accepted and dialog.selected_group:
             group_id, group_name = dialog.selected_group
@@ -484,7 +485,7 @@ class MainWindow(QMainWindow):
         """
             Xử lý việc chuyển đổi sang trang chủ.
         """
-        print("Chuyển sang trang chủ...")
+        logging.debug("Chuyển sang trang chủ...")
         self.current_content = 'home'
         self.content_stack.setCurrentWidget(self.home_widget)
         is_leader = self.is_leader_of_current_group if self.current_view == 'group' else False
@@ -507,7 +508,7 @@ class MainWindow(QMainWindow):
         """
             Xử lý việc chuyển đổi sang lịch.
         """
-        print("Chuyển sang lịch...")
+        logging.debug("Chuyển sang lịch...")
         self.current_content = 'calendar'
         self.content_stack.setCurrentWidget(self.calendar_widget)
         is_leader = self.is_leader_of_current_group if self.current_view == 'group' else False
@@ -623,7 +624,7 @@ class MainWindow(QMainWindow):
         """
         Hiển thị trang thống kê công việc cá nhân VÀ chi tiết từng nhóm.
         """
-        print("Chuyển sang trang Thống kê chi tiết...")
+        logging.debug("Chuyển sang trang Thống kê chi tiết...")
         
         if self.current_view != 'personal':
             self._handle_personal_view()

@@ -9,14 +9,15 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 # Tạo đường dẫn đầy đủ đến file database, nằm cùng thư mục với script
 db_path = os.path.join(current_dir, 'todolist_database.db')
 
-print(f"Sẽ tạo database tại: {db_path}")
+import logging
+logging.info(f"Sẽ tạo database tại: {db_path}")
 
 # Kết nối tới DB bằng đường dẫn đầy đủ và chính xác
 conn = sqlite3.connect(db_path)
 
 cursor = conn.cursor()
 # 1. Bảng User
-print("Đang tạo bảng users...")
+logging.info("Đang tạo bảng users...")
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,7 +28,7 @@ CREATE TABLE IF NOT EXISTS users (
 """)
 
 # 2. Bảng Group (ĐÃ CẬP NHẬT VỚI LEADER_ID)
-print("Đang tạo bảng groups...")
+logging.info("Đang tạo bảng groups...")
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS groups (
     group_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,7 +40,7 @@ CREATE TABLE IF NOT EXISTS groups (
 """)
 
 # 3. Bảng Tasks (Công việc cá nhân)
-print("Đang tạo bảng tasks...")
+logging.info("Đang tạo bảng tasks...")
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS tasks (
     task_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +57,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 """)
 
 # 4. Bảng group_members (Thành viên nhóm)
-print("Đang tạo bảng group_members...")
+logging.info("Đang tạo bảng group_members...")
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS group_members (
     user_id INTEGER NOT NULL,
@@ -68,7 +69,7 @@ CREATE TABLE IF NOT EXISTS group_members (
 """)
 
 # 5. Bảng group_tasks (Công việc nhóm)
-print("Đang tạo bảng group_tasks...")
+logging.info("Đang tạo bảng group_tasks...")
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS group_tasks (
     task_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,4 +89,4 @@ CREATE TABLE IF NOT EXISTS group_tasks (
 conn.commit()
 conn.close()
 
-print("\nCơ sở dữ liệu đã được tạo thành công với leader_id trong bảng groups!")
+logging.info("\nCơ sở dữ liệu đã được tạo thành công với leader_id trong bảng groups!")
