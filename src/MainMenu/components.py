@@ -618,6 +618,7 @@ class DayWidget(QFrame):
 
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setAlignment(Qt.AlignTop)
+        self.main_layout.setContentsMargins(2, 2, 2, 2)
 
         self.date_label = QLabel(date_text)
         self.date_label.setObjectName("DateLabel")
@@ -625,8 +626,20 @@ class DayWidget(QFrame):
         self.date_label.setStyleSheet("background: transparent;")
         self.main_layout.addWidget(self.date_label)
 
-        self.tasks_layout = QVBoxLayout()
-        self.main_layout.addLayout(self.tasks_layout)
+        # Create a simple container for tasks (no scrolling) so we can display
+        # a compact overflow indicator (+N) instead of letting the cell scroll.
+        tasks_container = QWidget()
+        self.tasks_layout = QVBoxLayout(tasks_container)
+        self.tasks_layout.setAlignment(Qt.AlignTop)
+        self.tasks_layout.setContentsMargins(0, 0, 0, 0)
+        self.tasks_layout.setSpacing(4)  # spacing between task widgets
+
+        # Add the container directly to the day cell. The add_task method
+        # already enforces a visible limit (e.g. 3 badges) and will create/update
+        # an overflow label like '+2' when there are extra tasks.
+        self.main_layout.addWidget(tasks_container)
+            
+
 
     def _prompt_for_new_task(self):
         default_date = datetime(self.year, self.month, self.day)

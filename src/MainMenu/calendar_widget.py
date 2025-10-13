@@ -185,6 +185,10 @@ class CalendarWidget(QWidget):
         
         # Nếu caller truyền sẵn tasks_by_day thì dùng nó (tránh fetch 2 lần).
         # Ngược lại widget sẽ tự fetch từ DB theo current_view_mode.
+        for i in range(1, self.grid_layout.rowCount()): # Bắt đầu từ hàng 1 để bỏ qua header
+            self.grid_layout.setRowStretch(i, 1)
+        for i in range(self.grid_layout.columnCount()):
+            self.grid_layout.setColumnStretch(i, 1)
         if tasks_by_day:
             tasks = tasks_by_day
         else:

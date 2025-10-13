@@ -130,7 +130,7 @@ class MainWindow(QMainWindow):
 
          # Cài đặt thuộc tính cơ bản cho cửa sổ
         self.setWindowTitle("To-do List")
-        self.setGeometry(100, 100, 1200, 800)
+        self.setGeometry(100, 100, 1600, 900)
         self.setStyleSheet(STYLESHEET)
         self.setObjectName("MainWindow")
 
