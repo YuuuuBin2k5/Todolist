@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-import re
 import sys
 import os
 import sqlite3
 import random
+import re
 import smtplib
 import ssl
 from email.message import EmailMessage
@@ -13,7 +13,6 @@ from PyQt5.QtCore import Qt, QPropertyAnimation, QPoint
 # [THAY ĐỔI] Thêm QFont vào đây
 from PyQt5.QtGui import QPixmap, QFont 
 from config import *
-import logging
 from MainMenu.main_window import MainWindow
 from Managers.database_manager import Database
 
@@ -57,20 +56,6 @@ class ForgotPasswordDialog(QDialog):
             }}
             QPushButton:hover {{ background-color: {BTN_PRIMARY_BG_HOVER}; }}
         """)
-
-        #--- CĂN GIỮA ---
-        # Lấy thông tin hình học của màn hình chính
-        screen_geometry = QApplication.primaryScreen().geometry()
-        
-        # Lấy thông tin hình học của cửa sổ ứng dụng (bao gồm cả viền)
-        window_geometry = self.frameGeometry()
-        
-        # Di chuyển tâm của hình chữ nhật cửa sổ đến tâm của màn hình
-        window_geometry.moveCenter(screen_geometry.center())
-        
-        # Di chuyển vị trí top-left của cửa sổ đến vị trí mới đã tính toán
-        self.move(window_geometry.topLeft())
-
     def _is_password_strong(self, password: str) -> tuple[bool, str]:
         """
         Kiểm tra độ mạnh của mật khẩu.
@@ -87,7 +72,6 @@ class ForgotPasswordDialog(QDialog):
         if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
             return False, "Mật khẩu phải chứa ít nhất một ký tự đặc biệt."
         return True, ""
-
     # --- Bước 1: Trang nhập Email ---
     def setup_email_page(self):
         layout = QVBoxLayout(self.email_page)
@@ -163,7 +147,7 @@ class ForgotPasswordDialog(QDialog):
 
         # Tạo mã và gửi email
         self.verification_code = str(random.randint(100000, 999999))
-        logging.debug(f"Generated code for {self.email}: {self.verification_code}")
+        print(f"Generated code for {self.email}: {self.verification_code}") # In ra để debug
         
         if self.send_verification_email(self.email, self.verification_code):
             QMessageBox.information(self, "Thành công", f"Mã xác thực đã được gửi tới {self.email}.")
@@ -211,7 +195,7 @@ class ForgotPasswordDialog(QDialog):
         email_password = 'your_app_password'     # Mật khẩu ứng dụng 16 ký tự
 
         if email_sender == 'your_email@gmail.com' or email_password == 'your_app_password':
-            logging.warning("!!! VUI LÒNG CẤU HÌNH EMAIL VÀ MẬT KHẨU ỨNG DỤNG TRONG HÀM send_verification_email !!!")
+            print("!!! VUI LÒNG CẤU HÌNH EMAIL VÀ MẬT KHẨU ỨNG DỤNG TRONG HÀM send_verification_email !!!")
             # Giả lập gửi email thành công để test giao diện
             return True 
         
@@ -234,7 +218,7 @@ class ForgotPasswordDialog(QDialog):
                 smtp.sendmail(email_sender, email_receiver, em.as_string())
             return True
         except Exception as e:
-            logging.exception("Lỗi gửi email")
+            print(f"Lỗi gửi email: {e}")
             QMessageBox.critical(self, "Lỗi", "Không thể gửi email xác thực.")
             return False
 
@@ -258,7 +242,7 @@ class LoginRegisterApp(QMainWindow):
         self.stacked_forms.setFixedSize(FORM_WIDTH, CONTAINER_HEIGHT)
         self.stacked_forms.setStyleSheet("background-color: transparent;")
         self.sign_in_form, self.email_input_signin, self.password_input_signin = self.create_form("Đăng Nhập", "hoặc sử dụng mật khẩu email của bạn")
-        self.sign_up_form, self.name_input_signup, self.email_input_signup, self.password_input_signup = self.create_form("Đăng Ký", "hoặc sử dụng email của bạn để đăng ký")
+        self.sign_up_form, self.name_input_signup, self.email_input_signup, self.password_input_signup, self.password_strength_label = self.create_form("Đăng Ký", "hoặc sử dụng email của bạn để đăng ký")
         self.stacked_forms.addWidget(self.sign_in_form)
         self.stacked_forms.addWidget(self.sign_up_form)
         self.base_layout.addWidget(self.stacked_forms)
@@ -282,6 +266,7 @@ class LoginRegisterApp(QMainWindow):
         self.animation_form.setDuration(ANIMATION_DURATION_MS)
         self.animation_toggle = QPropertyAnimation(self.toggle_panel, b"pos")
         self.animation_toggle.setDuration(ANIMATION_DURATION_MS)
+        self.password_input_signup.textChanged.connect(self._update_password_strength_indicator)
 
     def closeEvent(self, event):
         if not self._allow_close:
@@ -292,7 +277,93 @@ class LoginRegisterApp(QMainWindow):
                 event.ignore()
         else:
             event.accept()
+    # Trong lớp LoginRegisterApp
 
+    def _evaluate_password_strength_detailed(self, password: str) -> tuple[str, str, list]:
+        """
+        Đánh giá chi tiết độ mạnh của mật khẩu.
+        Trả về: (trạng thái, màu sắc, danh sách tiêu chí còn thiếu).
+        """
+        if not password:
+            return ("", "transparent", [])
+
+        missing_criteria = []
+        
+        # Tiêu chí 1: Độ dài
+        if len(password) < 8:
+            missing_criteria.append("Ít nhất 8 ký tự")
+            
+        # Tiêu chí 2: Chữ hoa
+        if not re.search(r"[A-Z]", password):
+            missing_criteria.append("Một chữ hoa")
+            
+        # Tiêu chí 3: Chữ thường
+        if not re.search(r"[a-z]", password):
+            missing_criteria.append("Một chữ thường")
+            
+        # Tiêu chí 4: Chữ số
+        if not re.search(r"\d", password):
+            missing_criteria.append("Một chữ số")
+
+        # Tiêu chí 5: Ký tự đặc biệt
+        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+            missing_criteria.append("Một ký tự đặc biệt")
+
+        if not missing_criteria:
+            return ("Rất mạnh", "green", [])
+        elif len(missing_criteria) <= 2:
+            return ("Trung bình", "#f39c12", missing_criteria) # Màu cam
+        else:
+            return ("Yếu", "red", missing_criteria)
+
+
+    def _update_password_strength_indicator(self, password: str):
+        """
+        Cập nhật QLabel hiển thị độ mạnh và các yêu cầu còn thiếu.
+        """
+        strength_text, color, missing = self._evaluate_password_strength_detailed(password)
+        
+        display_text = strength_text
+        if missing:
+            # Nối các yêu cầu còn thiếu vào chuỗi hiển thị
+            details = ", ".join(missing)
+            display_text += f" (Còn thiếu: {details})"
+            
+        self.password_strength_label.setText(display_text)
+        self.password_strength_label.setStyleSheet(f"color: {color}; font-size: 12px; margin-top: 5px;")
+        self.password_strength_label.setWordWrap(True) # Cho phép label xuống dòng nếu quá dài
+
+
+    def handle_sign_up(self):
+        name = self.name_input_signup.text()
+        email = self.email_input_signup.text()
+        password = self.password_input_signup.text()
+        if not name or not email or not password:
+            QMessageBox.warning(self, "Lỗi", "Vui lòng điền đầy đủ tất cả các trường.")
+            return
+
+        # Kiểm tra xem mật khẩu có "Rất mạnh" không
+        strength, _, missing = self._evaluate_password_strength_detailed(password)
+        if strength != "Rất mạnh":
+            error_message = "Mật khẩu chưa đủ mạnh.\nVui lòng đáp ứng các yêu cầu sau:\n\n- " + "\n- ".join(missing)
+            QMessageBox.warning(self, "Mật khẩu yếu", error_message)
+            return
+
+        try:
+            db = Database()
+            # Kiểm tra email tồn tại
+            if db.get_user_by_email(email):
+                QMessageBox.warning(self, "Lỗi", "Email này đã được sử dụng. Vui lòng chọn email khác.")
+                return
+                
+            created_id = db.create_user(name, password, email)
+            if created_id is not None:
+                QMessageBox.information(self, "Thành công", "Đăng ký thành công! Vui lòng đăng nhập.")
+                self.show_sign_in()
+            else:
+                QMessageBox.warning(self, "Lỗi", "Không thể tạo tài khoản do lỗi không xác định.")
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi CSDL", f"Lỗi khi kết nối hoặc truy vấn CSDL: {e}")
     def create_form(self, title, subtitle):
         widget = QWidget()
         layout = QVBoxLayout(widget)
@@ -306,6 +377,16 @@ class LoginRegisterApp(QMainWindow):
         social_layout = QHBoxLayout()
         social_layout.setAlignment(Qt.AlignCenter)
         social_layout.setSpacing(10)
+        social_icons = ["assets/images/google_icon.png", "assets/images/facebook_icon.png", "assets/images/instagram_icon.png", "assets/images/github_icon.png"]
+        for icon_path in social_icons:
+            icon_label = QLabel()
+            icon_pixmap = QPixmap(icon_path)
+            icon_pixmap_scaled = icon_pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            icon_label.setPixmap(icon_pixmap_scaled)
+            icon_label.setFixedSize(40, 40)
+            icon_label.setAlignment(Qt.AlignCenter)
+            icon_label.setStyleSheet(f"border: 1px solid {COLOR_GRAY}; border-radius: 20px;")
+            social_layout.addWidget(icon_label)
         layout.addLayout(social_layout)
         subtitle_label = QLabel(f"<p>{subtitle}</p>")
         subtitle_label.setStyleSheet(f"font-size: 14px; color: {TEXT_MUTED};")
@@ -323,6 +404,11 @@ class LoginRegisterApp(QMainWindow):
         password_input.setStyleSheet(f"padding: 10px; height: 40px; border: none; background-color: {INPUT_BG}; border-radius: 8px;")
         password_input.setEchoMode(QLineEdit.Password)
         layout.addWidget(password_input)
+        strength_label = None
+        if "Đăng Ký" in title:
+            strength_label = QLabel("") # Tạo label rỗng
+            strength_label.setStyleSheet("font-size: 12px; margin-top: 5px;")
+            layout.addWidget(strength_label)
         if "Đăng Nhập" in title:
             # [THAY ĐỔI] Biến label thành button có thể nhấn
             forgot_password_btn = QPushButton("Quên mật khẩu?")
@@ -344,7 +430,7 @@ class LoginRegisterApp(QMainWindow):
             password_input.returnPressed.connect(button.click)
         layout.addWidget(button, alignment=Qt.AlignCenter)
         if "Đăng Ký" in title:
-            return widget, name_input, email_input, password_input
+            return widget, name_input, email_input, password_input, strength_label
         else:
             return widget, email_input, password_input
 
@@ -410,6 +496,21 @@ class LoginRegisterApp(QMainWindow):
         if not name or not email or not password:
             QMessageBox.warning(self, "Lỗi", "Vui lòng điền đầy đủ tất cả các trường.")
             return
+        strength, _ = self._evaluate_password_strength(password)
+        if strength != "Mạnh":
+            QMessageBox.warning(self, "Mật khẩu yếu", "Vui lòng tạo một mật khẩu mạnh hơn trước khi đăng ký.")
+            return
+
+        try:
+            db = Database()
+            created_id = db.create_user(name, password, email)
+            if created_id is not None:
+                QMessageBox.information(self, "Thành công", "Đăng ký thành công! Vui lòng đăng nhập.")
+                self.show_sign_in()
+            else:
+                QMessageBox.warning(self, "Lỗi", "Email này đã tồn tại hoặc không thể tạo tài khoản.")
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi CSDL", f"Lỗi khi kết nối hoặc truy vấn CSDL: {e}")
         try:
             db = Database()
             created_id = db.create_user(name, password, email)
