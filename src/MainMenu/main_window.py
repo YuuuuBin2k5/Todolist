@@ -133,6 +133,12 @@ class MainWindow(QMainWindow):
          # Cài đặt thuộc tính cơ bản cho cửa sổ
         self.setWindowTitle("To-do List")
         self.setGeometry(100, 100, 1600, 900)
+        # Fix the main window size so it's not resizable by the user
+        try:
+            self.setFixedSize(1600, 900)
+        except Exception:
+            # Older PyQt versions may behave differently; ignore if not supported
+            pass
         self.setStyleSheet(STYLESHEET)
         self.setObjectName("MainWindow")
 

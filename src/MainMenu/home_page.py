@@ -293,7 +293,6 @@ class DoNowView(QWidget):
         if not self.group_id: return
         try:
             members = self.db.get_group_members(self.group_id)
-            self.member_selector.addItem("Unassigned", None)
             for member_id, member_name in members:
                 self.member_selector.addItem(member_name, member_id)
         except Exception as e:
