@@ -194,8 +194,8 @@ class Database:
         return res[0] if res else None
 
     def get_group_members(self, group_id: int) -> List[Tuple]:
-        """Lấy danh sách thành viên nhóm: (user_id, user_name, email)."""
-        query = "SELECT u.user_id, u.user_name, u.email FROM users u JOIN group_members gm ON u.user_id = gm.user_id WHERE gm.group_id = ?"
+        """Lấy danh sách thành viên nhóm: (user_id, user_name)."""
+        query = "SELECT u.user_id, u.user_name FROM users u JOIN group_members gm ON u.user_id = gm.user_id WHERE gm.group_id = ?"
         return self._execute_query(query, (group_id,), fetch="all") or []
 
     # ----------------- Công việc nhóm --------------------------
@@ -211,6 +211,16 @@ class Database:
             query = "INSERT INTO group_tasks (group_id, assignee_id, title, note, is_done, due_at, creator_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
             params = (group_id, assignee_id, title, note, is_done, due_at, creator_id)
         self._execute_query(query, params, commit=True)
+
+    def get_group_tasks(self, group_id: int) -> List[Tuple]:
+        """Lấy tất cả các task của một nhóm."""
+        query = """
+            SELECT task_id, group_id, assignee_id, title, note, is_done, due_at
+            FROM group_tasks
+            WHERE group_id = ?
+            ORDER BY is_done ASC, due_at DESC
+        """
+        return self._execute_query(query, (group_id,), fetch="all") or []
 
     def get_group_tasks_for_month(self, group_id: int, month_str: str) -> List[Tuple]:
         """Lấy tasks của nhóm trong tháng (format 'YYYY-MM')."""
@@ -239,7 +249,6 @@ class Database:
 
     def get_group_tasks_for_user_month(self, user_id: int, month_str: str) -> List[Tuple]:
         """Lấy công việc nhóm được giao cho user trong tháng.
-
         Trả về danh sách hoặc [].
         """
         query = "SELECT task_id, group_id, assignee_id, title, note, is_done, due_at FROM group_tasks WHERE assignee_id = ? AND strftime('%Y-%m', due_at) = ?"

@@ -2,7 +2,6 @@
 import os
 from datetime import datetime, timedelta
 import time
-from typing import Optional
 
 from Managers.database_manager import Database
 
@@ -80,7 +79,8 @@ class TaskItemWidget(QFrame):
             title_font_style = f"font-size: 15px; text-decoration: line-through; color: {COLOR_TEXT_SECONDARY};"
         title_label.setStyleSheet(title_font_style)
         content_layout.addWidget(title_label)
-        # Show note if present
+
+        # Hiện ghi chú nếu có
         note_text = self.task_data.get('note', '')
         if note_text:
             note_label = QLabel(note_text)
@@ -94,6 +94,10 @@ class TaskItemWidget(QFrame):
             priority_color = PRIORITY_COLORS.get(priority, COLOR_TEXT_SECONDARY)
             details_text.append(f"<b style='color:{priority_color};'>P{priority}</b>")
 
+        assignee_name = self.task_data.get('assignee_name')
+        if assignee_name:
+            details_text.append(f"👤 {assignee_name}")
+
         if self.task_data['due_at']:
             try:
                 due_date = _parse_iso_datetime_module(self.task_data['due_at'])
@@ -103,6 +107,7 @@ class TaskItemWidget(QFrame):
                     details_text.append(f"📅 {self.task_data['due_at']}")
             except Exception:
                 details_text.append(f"📅 {self.task_data['due_at']}")
+
         if self.task_data['estimated_minutes']:
              details_text.append(f"⏱️ {self.task_data['estimated_minutes']}m")
         if self.meta_data and 'actual' in self.meta_data:
@@ -169,6 +174,10 @@ class DoNowView(QWidget):
         
         # [THÊM] State để lưu priority được chọn trong form
         self.current_priority = 4
+        # Ensure view context defaults exist so callers can safely query
+        self.view_mode = 'personal'
+        self.group_id = None
+        self.is_leader = False
         
         self.setupUI()
         self.load_data_from_db()
@@ -195,10 +204,11 @@ class DoNowView(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(25, 20, 25, 20)
         main_layout.setSpacing(20)
-        header = QLabel("My Tasks")
-        header.setStyleSheet(f"font-size: 28px; font-weight: bold; color: {COLOR_TEXT_PRIMARY};")
-        header.setAlignment(Qt.AlignLeft)
-        main_layout.addWidget(header)
+
+        self.header_label = QLabel("My Tasks")
+        self.header_label.setStyleSheet(f"font-size: 28px; font-weight: bold; color: {COLOR_TEXT_PRIMARY};")
+        self.header_label.setAlignment(Qt.AlignLeft)
+        main_layout.addWidget(self.header_label)
         main_layout.addWidget(self._create_form_group())
         main_layout.addWidget(self._create_filter_bar())
         main_layout.addWidget(self._create_task_list_group(), 1)
@@ -213,26 +223,82 @@ class DoNowView(QWidget):
         self.estimated_input = QLineEdit(placeholderText="Time in minutes")
         # [THÊM] Ghi chú cho task
         self.note_input = QLineEdit(placeholderText="Optional note")
-        
+
         # [THÊM] Nút chọn Priority
         self.priority_button = QPushButton()
         self.priority_button.setToolTip("Set Priority")
         self._set_priority(4) # Set icon mặc định
         self.priority_button.clicked.connect(self._show_priority_menu)
 
+        self.member_selector = QComboBox()
+        self.member_selector.setPlaceholderText("Assign to member")
+        self.member_selector.hide()
+
         add_btn = QPushButton("Add Task")
         add_btn.setObjectName("MainCTA")
-        
-        layout.addWidget(self.title_input, 0, 0, 1, 2)
+        # expose to instance so set_view_context can enable/disable or hide/show
+        self.add_btn = add_btn
+
+        layout.addWidget(self.title_input, 0, 0, 1, 3)
+        layout.addWidget(self.add_btn, 0, 3)
         layout.addWidget(self.due_date_input, 1, 0)
         layout.addWidget(self.estimated_input, 1, 1)
-        layout.addWidget(self.priority_button, 1, 2) # Thêm nút priority vào layout
-        layout.addWidget(add_btn, 0, 2, 1, 1) # Chỉ chiếm 1 hàng
-        layout.addWidget(self.note_input, 2, 0, 1, 3)
-
+        layout.addWidget(self.priority_button, 1, 2)
+        layout.addWidget(self.member_selector, 1, 3)
+        layout.addWidget(self.note_input, 2, 0, 1, 4)
+        
         add_btn.clicked.connect(self._handle_add_task)
         self.title_input.returnPressed.connect(self._handle_add_task)
+        # expose group container for title changes
+        self.group = group
         return group
+
+    def set_view_context(self, mode, group_id=None, is_leader=False):
+        self.view_mode = mode
+        self.group_id = group_id
+        self.is_leader = is_leader
+        
+        if mode == 'personal':
+            self.header_label.setText("My Tasks")
+            self.group.setTitle("✨ Add New Task")
+            self._set_form_enabled(True)
+            self.member_selector.hide()
+            self.add_btn.show()
+        elif mode == 'group':
+            self.header_label.setText("Group Tasks")
+            if is_leader:
+                self.group.setTitle("✨ Add Group Task")
+                self._set_form_enabled(True)
+                self._populate_member_selector()
+                self.member_selector.show()
+                self.add_btn.show()
+            else:
+                self.group.setTitle("Add Group Task (Leader Only)")
+                self._set_form_enabled(False)
+                self.member_selector.hide()
+                self.add_btn.hide()
+
+        self.load_data_from_db()
+
+    def _set_form_enabled(self, enabled: bool):
+        self.title_input.setEnabled(enabled)
+        self.due_date_input.setEnabled(enabled)
+        self.estimated_input.setEnabled(enabled)
+        self.note_input.setEnabled(enabled)
+        self.priority_button.setEnabled(enabled)
+        self.add_btn.setEnabled(enabled)
+
+    def _populate_member_selector(self):
+        self.member_selector.clear()
+        if not self.group_id: return
+        try:
+            members = self.db.get_group_members(self.group_id)
+            self.member_selector.addItem("Unassigned", None)
+            for member_id, member_name in members:
+                self.member_selector.addItem(member_name, member_id)
+        except Exception as e:
+            print(f"Lỗi khi tải danh sách thành viên: {e}")
+
 
     def _show_priority_menu(self):
         menu = QMenu(self)
@@ -256,7 +322,6 @@ class DoNowView(QWidget):
             self.priority_button.setIcon(QIcon(icon_path))
 
     def _create_filter_bar(self):
-        # ... (Hàm này giữ nguyên)
         container = QFrame()
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0,0,0,0)
@@ -270,7 +335,6 @@ class DoNowView(QWidget):
         return container
 
     def _create_task_list_group(self):
-        # ... (Hàm này giữ nguyên)
         group = QGroupBox("📌 Task List")
         layout = QVBoxLayout(group)
         layout.setContentsMargins(0, 5, 0, 5)
@@ -286,7 +350,6 @@ class DoNowView(QWidget):
         return group
 
     def _create_pagination_controls(self):
-        # ... (Hàm này giữ nguyên)
         layout = QHBoxLayout()
         self.prev_btn = QPushButton("Previous")
         self.next_btn = QPushButton("Next")
@@ -305,30 +368,31 @@ class DoNowView(QWidget):
         return layout
 
     def load_data_from_db(self):
+        self.tasks = []
         try:
-            rows = self.db.get_tasks_for_user(self.user_id)
-            # Database.get_tasks_for_user returns rows like:
-            # (task_id, title, is_done, due_at, estimate_minutes, priority, note)
-            self.tasks = []
-            for r in rows:
-                task_id = str(r[0])
-                title = r[1]
-                is_done = bool(r[2])
-                due_at = r[3]
-                estimated = r[4]
-                priority = r[5] if len(r) > 5 else 4
-                note = r[6] if len(r) > 6 else ""
-                self.tasks.append({
-                    "id": task_id,
-                    "title": title,
-                    "is_done": is_done,
-                    "due_at": due_at,
-                    "estimated_minutes": estimated,
-                    "priority": priority,
-                    "note": note,
-                })
+            if self.view_mode == 'personal':
+                rows = self.db.get_tasks_for_user(self.user_id)
+                for r in rows:
+                    self.tasks.append({
+                        "id": str(r[0]), "title": r[1], "is_done": bool(r[2]),
+                        "due_at": r[3], "estimated_minutes": r[4], 
+                        "priority": r[5] if len(r) > 5 else 4,
+                        "note": r[6] if len(r) > 6 else ""
+                    })
+            elif self.view_mode == 'group' and self.group_id:
+                rows = self.db.get_group_tasks(self.group_id)
+                for r in rows:
+                    assignee_id = r[2]
+                    assignee_name = self.db.get_user_name(assignee_id) if assignee_id else "Unassigned"
+                    self.tasks.append({
+                        "id": str(r[0]), "title": r[3], "note": r[4],
+                        "is_done": bool(r[5]), "due_at": r[6],
+                        "assignee_name": assignee_name,
+                        "priority": 4,
+                        "estimated_minutes": None,
+                    })
         except Exception as e:
-            print(f"Lỗi khi tải tasks: {e}")
+            QMessageBox.critical(self, "Lỗi", f"Không thể tải nhiệm vụ: {e}")
         self.render_tasks()
 
     # Compatibility wrapper: older callers call `load_data()`
@@ -358,7 +422,6 @@ class DoNowView(QWidget):
             return None
 
     def get_visible_tasks(self):
-        # [SỬA] Sắp xếp theo priority trước
         def sort_key(task):
             # Sắp xếp theo is_done (chưa xong trước), sau đó là priority (1 là cao nhất), sau đó là điểm urgency
             return (task['is_done'], task.get('priority', 4), -calculate_urgency_score(task))
@@ -389,13 +452,14 @@ class DoNowView(QWidget):
         return filtered_tasks, filtered_tasks[start:start + self.page_size]
 
     def render_tasks(self):
-        # ... (Hàm này giữ nguyên logic, chỉ gọi get_visible_tasks đã được sửa)
         while self.tasks_layout.count():
             child = self.tasks_layout.takeAt(0)
             if child.widget(): child.widget().deleteLater()
+
         all_filtered, visible_tasks = self.get_visible_tasks()
+
         if not visible_tasks:
-            no_tasks_label = QLabel("🎉 You're all caught up! No tasks here.")
+            no_tasks_label = QLabel("🎉 Bạn không có nhiệm vụ nào.")
             no_tasks_label.setAlignment(Qt.AlignCenter)
             no_tasks_label.setStyleSheet(f"color: {COLOR_TEXT_SECONDARY}; font-size: 14px; padding: 40px;")
             self.tasks_layout.addWidget(no_tasks_label)
@@ -414,69 +478,82 @@ class DoNowView(QWidget):
     def _handle_add_task(self):
         title = self.title_input.text().strip()
         if not title: return
-        # Normalize due_at to 'YYYY-MM-DD HH:MM:SS' in local time
+        
         qdt = self.due_date_input.dateTime()
-        # convert to python datetime
         py_dt = datetime(qdt.date().year(), qdt.date().month(), qdt.date().day(), qdt.time().hour(), qdt.time().minute(), qdt.time().second())
         due_at = py_dt.strftime('%Y-%m-%d %H:%M:%S')
+        
         estimated = self.estimated_input.text().strip()
         est_mins = int(estimated) if estimated.isdigit() else None
         note = self.note_input.text().strip()
+        
         try:
-            # Use Database helper to add task with metadata (explicit call)
-            self.db.add_task_with_meta(self.user_id, title, note=note, is_done=0, due_at=due_at, estimated_minutes=est_mins, priority=self.current_priority)
-            # Reload tasks to get consistent state (including new id)
+            if self.view_mode == 'personal':
+                self.db.add_task_with_meta(
+                    self.user_id, title, note=note, is_done=0, due_at=due_at, 
+                    estimated_minutes=est_mins, priority=self.current_priority
+                )
+            elif self.view_mode == 'group' and self.is_leader:
+                assignee_id = self.member_selector.currentData()
+                self.db.add_group_task(
+                    self.group_id, title, assignee_id, note=note, is_done=0, due_at=due_at
+                )
+            else:
+                return
+            
             self.title_input.clear(); self.estimated_input.clear()
             self.note_input.clear()
             self._set_priority(4)
             self.load_data_from_db()
         except Exception as e:
-            print(f"Lỗi khi thêm task: {e}")
+            QMessageBox.critical(self, "Lỗi", f"Không thể thêm nhiệm vụ: {e}")
     
-    # Các hàm _handle_toggle_task, _handle_delete_task, ... giữ nguyên
     def _handle_toggle_task(self, task_id):
-        # ... (giữ nguyên)
         task = next((t for t in self.tasks if t['id'] == task_id), None)
         if not task: return
+        
         new_status = not task['is_done']
-        task['is_done'] = new_status
         try:
-            self.db.update_task_status(int(task_id), int(new_status))
+            if self.view_mode == 'personal':
+                self.db.update_task_status(int(task_id), int(new_status))
+            elif self.view_mode == 'group':
+                self.db.update_group_task_status(int(task_id), int(new_status))
+            
+            task['is_done'] = new_status
+            self.render_tasks()
         except Exception as e:
-            print(f"Lỗi khi cập nhật trạng thái task: {e}")
-        self.render_tasks()
+            QMessageBox.critical(self, "Lỗi", f"Không thể cập nhật trạng thái: {e}")
+
 
     def _handle_delete_task(self, task_id):
-        # ... (giữ nguyên)
-        self.tasks = [t for t in self.tasks if t['id'] != task_id]
-        if task_id in self.meta: del self.meta[task_id]
-        if task_id in self.history: del self.history[task_id]
         try:
-            self.db.delete_task(int(task_id))
+            if self.view_mode == 'personal':
+                self.db.delete_task(int(task_id))
+            elif self.view_mode == 'group':
+                self.db.delete_group_task(int(task_id))
+            
+            self.tasks = [t for t in self.tasks if t['id'] != task_id]
+            if task_id in self.meta: del self.meta[task_id]
+            if task_id in self.history: del self.history[task_id]
+            self.render_tasks()
         except Exception as e:
-            print(f"Lỗi khi xóa task: {e}")
-        self.render_tasks()
+            QMessageBox.critical(self, "Lỗi", f"Không thể xóa nhiệm vụ: {e}")
 
     def _handle_start_task(self, task_id):
-        # ... (giữ nguyên)
         self.meta.setdefault(task_id, {})['start'] = time.time()
         QMessageBox.information(self, "Task Started", "Timer for task has started.")
 
     def _handle_search_change(self, text):
-        # ... (giữ nguyên)
         self.search_text = text; self.page = 1; self.render_tasks()
 
     def _handle_filter_change(self, index):
-        # ... (giữ nguyên)
         self.filter_status = {0: "all", 1: "pending", 2: "done"}.get(index)
         self.page = 1; self.render_tasks()
         
     def _handle_page_change(self, delta):
-        # ... (giữ nguyên)
         self.page = max(1, self.page + delta); self.render_tasks()
         
     def _check_deadlines(self):
-        # ... (giữ nguyên)
         now_utc = datetime.utcnow()
         for task in self.tasks:
             if not task['is_done'] and task['due_at']:

@@ -293,12 +293,20 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Lỗi CSDL", f"Không thể tải thông tin nhóm: {e}")
             return
 
-        # Inform calendar about group context and switch its view mode
-        try:
-            self.calendar_widget.set_group_context(self.current_group_id)
-            self.calendar_widget.switch_view_mode('group')
-        except Exception:
-            pass
+        if self.current_content == 'home':
+            self.home_widget.set_view_context(
+                mode='group', 
+                group_id=self.current_group_id, 
+                is_leader=self.is_leader_of_current_group
+            )
+        
+        # Cập nhật context cho lịch khi đang ở trang lịch
+        if self.current_content == 'calendar':
+            try:
+                self.calendar_widget.set_group_context(self.current_group_id)
+                self.calendar_widget.switch_view_mode('group')
+            except Exception:
+                pass
     
     def _handle_personal_view(self):
         """
@@ -359,6 +367,15 @@ class MainWindow(QMainWindow):
         # Cập nhật dữ liệu cho trang chủ
         self.home_widget.user_id = self.user_id
         self.home_widget.load_data()
+
+        if self.current_view == 'personal':
+            self.home_widget.set_view_context(mode='personal')
+        elif self.current_view == 'group':
+            self.home_widget.set_view_context(
+                mode='group',
+                group_id=self.current_group_id,
+                is_leader=self.is_leader_of_current_group
+            )
 
     def _handle_calendar_view(self):
         """
