@@ -88,7 +88,7 @@ class TaskItemWidget(QFrame):
             content_layout.addWidget(note_label)
         
         details_text = []
-        # [SỬA] Thêm hiển thị Priority
+ 
         priority = self.task_data.get('priority', 4)
         if priority < 4:
             priority_color = PRIORITY_COLORS.get(priority, COLOR_TEXT_SECONDARY)
@@ -234,7 +234,6 @@ class DoNowView(QWidget):
         self.title_input.returnPressed.connect(self._handle_add_task)
         return group
 
-    # [THÊM] Hàm hiển thị menu chọn Priority
     def _show_priority_menu(self):
         menu = QMenu(self)
         icons = {

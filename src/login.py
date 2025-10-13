@@ -213,7 +213,7 @@ class LoginRegisterApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self._allow_close = False
-        self.setWindowTitle("Login/Register")
+        self.setWindowTitle("Đăng Nhập/Đăng Ký")
         self.setGeometry(100, 100, CONTAINER_WIDTH, CONTAINER_HEIGHT)
         self.setFixedSize(CONTAINER_WIDTH, CONTAINER_HEIGHT)
         self.main_container = QWidget()
@@ -225,8 +225,8 @@ class LoginRegisterApp(QMainWindow):
         self.stacked_forms = QStackedWidget()
         self.stacked_forms.setFixedSize(FORM_WIDTH, CONTAINER_HEIGHT)
         self.stacked_forms.setStyleSheet("background-color: transparent;")
-        self.sign_in_form, self.email_input_signin, self.password_input_signin = self.create_form("Sign In", "or use your email password")
-        self.sign_up_form, self.name_input_signup, self.email_input_signup, self.password_input_signup = self.create_form("Create Account", "or use your email for registration")
+        self.sign_in_form, self.email_input_signin, self.password_input_signin = self.create_form("Đăng Nhập", "hoặc sử dụng mật khẩu email của bạn")
+        self.sign_up_form, self.name_input_signup, self.email_input_signup, self.password_input_signup = self.create_form("Đăng Ký", "hoặc sử dụng email của bạn để đăng ký")
         self.stacked_forms.addWidget(self.sign_in_form)
         self.stacked_forms.addWidget(self.sign_up_form)
         self.base_layout.addWidget(self.stacked_forms)
@@ -236,9 +236,9 @@ class LoginRegisterApp(QMainWindow):
         self.toggle_layout = QStackedWidget(self.toggle_panel)
         self.toggle_layout.setFixedSize(TOGGLE_PANEL_WIDTH, CONTAINER_HEIGHT)
         self.toggle_layout.setStyleSheet("background-color: transparent;")
-        self.toggle_left = self.create_toggle_panel("Chào mừng trở lại!", "Hãy nhập thông tin cá nhân của bạn để sử dụng tất cả các tính năng của trang web nhé", "Sign In")
+        self.toggle_left = self.create_toggle_panel("Chào mừng trở lại!", "Hãy nhập thông tin cá nhân của bạn để sử dụng tất cả các tính năng của trang web nhé", "Đăng Nhập")
         self.toggle_layout.addWidget(self.toggle_left)
-        self.toggle_right = self.create_toggle_panel("Chào bạn!", "Hãy đăng ký với thông tin cá nhân của bạn để sử dụng tất cả các tính năng của trang web", "Sign Up")
+        self.toggle_right = self.create_toggle_panel("Chào bạn!", "Hãy đăng ký với thông tin cá nhân của bạn để sử dụng tất cả các tính năng của trang web", "Đăng Ký")
         self.toggle_layout.addWidget(self.toggle_right)
         self.base_layout.addWidget(self.toggle_panel)
         self.base_layout.setAlignment(self.toggle_panel, Qt.AlignRight)
@@ -293,7 +293,7 @@ class LoginRegisterApp(QMainWindow):
         email_input.setStyleSheet(f"padding: 10px; height: 40px; border: none; background-color: {INPUT_BG}; border-radius: 8px;")
         layout.addWidget(email_input)
         name_input, password_input = None, None
-        if "Create" in title:
+        if "Đăng Ký" in title:
             name_input = QLineEdit(placeholderText="Name")
             name_input.setStyleSheet(f"padding: 10px; height: 40px; border: none; background-color: {INPUT_BG}; border-radius: 8px;")
             layout.addWidget(name_input)
@@ -301,9 +301,9 @@ class LoginRegisterApp(QMainWindow):
         password_input.setStyleSheet(f"padding: 10px; height: 40px; border: none; background-color: {INPUT_BG}; border-radius: 8px;")
         password_input.setEchoMode(QLineEdit.Password)
         layout.addWidget(password_input)
-        if "Sign In" in title:
+        if "Đăng Nhập" in title:
             # [THAY ĐỔI] Biến label thành button có thể nhấn
-            forgot_password_btn = QPushButton("Forgot Your Password?")
+            forgot_password_btn = QPushButton("Quên mật khẩu?")
             forgot_password_btn.setStyleSheet(f"font-size: 12px; margin-top: 10px; margin-bottom: 20px; border: none; color: {TEXT_MUTED};")
             forgot_password_btn.setCursor(Qt.PointingHandCursor)
             forgot_password_btn.clicked.connect(self.show_forgot_password_dialog)
@@ -311,7 +311,7 @@ class LoginRegisterApp(QMainWindow):
         button = QPushButton(title)
         button.setFixedSize(120, 30)
         button.setStyleSheet(f"background-color: {COLOR_SECONDARY_BLUE}; color: {COLOR_WHITE}; border: none; font-weight: 600; text-transform: uppercase; border-radius: 8px;")
-        if "Sign In" in title:
+        if "Đăng Nhập" in title:
             button.clicked.connect(self.handle_sign_in)
             email_input.returnPressed.connect(button.click)
             password_input.returnPressed.connect(button.click)
@@ -321,7 +321,7 @@ class LoginRegisterApp(QMainWindow):
             email_input.returnPressed.connect(button.click)
             password_input.returnPressed.connect(button.click)
         layout.addWidget(button, alignment=Qt.AlignCenter)
-        if "Create" in title:
+        if "Đăng Ký" in title:
             return widget, name_input, email_input, password_input
         else:
             return widget, email_input, password_input

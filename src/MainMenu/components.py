@@ -553,7 +553,7 @@ class AddTaskDialog(QDialog):
         title_label.setStyleSheet("color: #2e7d32; font-weight:600;")
         self.title_input = QLineEdit()
         self.title_input.setPlaceholderText("Nhập tiêu đề công việc...")
-        self.title_input.setFixedHeight(34)
+        self.title_input.setFixedHeight(40)
         main_layout.addWidget(title_label)
         main_layout.addWidget(self.title_input)
 
@@ -563,7 +563,7 @@ class AddTaskDialog(QDialog):
         self.date_edit = QDateTimeEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDisplayFormat('yyyy-MM-dd HH:mm:ss')
-        self.date_edit.setFixedHeight(34)
+        self.date_edit.setFixedHeight(40)
         if default_date:
             dt = QDateTime(default_date.year, default_date.month, default_date.day,
                            default_date.hour if hasattr(default_date, 'hour') else 0,

@@ -6,10 +6,20 @@
     - Nút thoát trở về màn hình đăng nhập
 """
 
-from PyQt5.QtWidgets import QFrame, QVBoxLayout, QLabel, QPushButton, QSpacerItem, QSizePolicy
-from PyQt5.QtGui import QPainter, QBrush, QColor, QPixmap
-from config import COLOR_GRAY
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtWidgets import QFrame, QVBoxLayout, QLabel, QPushButton, QSpacerItem, QSizePolicy, QFileDialog, QHBoxLayout
+from PyQt5.QtGui import QPainter, QBrush, QColor, QPixmap, QPainterPath, QPen
+from config import COLOR_GRAY, COLOR_PRIMARY, COLOR_PRIMARY_BLUE, COLOR_SECONDARY_BLUE, COLOR_TEXT_PRIMARY, COLOR_BORDER, COLOR_HOVER, COLOR_WHITE
+from PyQt5.QtCore import Qt, pyqtSignal, QRectF
+
+
+class ClickableLabel(QLabel):
+    """A QLabel that emits a clicked signal when pressed."""
+    from PyQt5.QtCore import pyqtSignal
+    clicked = pyqtSignal()
+
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        self.clicked.emit()
 
 class SidePanel(QFrame):
     """
@@ -31,6 +41,8 @@ class SidePanel(QFrame):
 
     # Tín hiệu phát ra khi yêu cầu xem thống kê
     statistics_requested = pyqtSignal()
+    # Signal to notify parent that avatar path changed (persistence handled by parent)
+    avatar_changed = pyqtSignal(str)
 
 
     def __init__(self, parent=None):
@@ -39,65 +51,143 @@ class SidePanel(QFrame):
         self.setFixedWidth(300)
         self.setObjectName("SidePanel")
 
+        # Apply polished blue theme for side panel
+        self.setStyleSheet(f"""
+            QFrame#SidePanel {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {COLOR_PRIMARY_BLUE}, stop:1 {COLOR_SECONDARY_BLUE});
+                border-right: 1px solid {COLOR_BORDER};
+            }}
+
+            QLabel {{
+                color: {COLOR_WHITE};
+            }}
+
+            QLabel#InfoValueLabel {{
+                color: {COLOR_WHITE};
+                font-weight: 800;
+                font-size: 15px;
+                letter-spacing: 0.2px;
+                margin-top: 4px;
+            }}
+
+            QLabel#InfoTitleLabel {{
+                color: rgba(255,255,255,0.85);
+                font-weight: 600;
+                font-size: 11px;
+                margin-bottom: 2px;
+                text-transform: uppercase;
+                letter-spacing: 0.8px;
+            }}
+
+            QLabel#RolePill {{
+                background: rgba(255,255,255,0.12);
+                color: {COLOR_WHITE};
+                border-radius: 12px;
+                padding: 6px 12px;
+                font-weight: 700;
+                min-width: 80px;
+                qproperty-alignment: 'AlignCenter';
+            }}
+
+            QPushButton {{
+                background: rgba(255,255,255,0.08);
+                color: {COLOR_WHITE};
+                border: 1px solid rgba(255,255,255,0.12);
+                border-radius: 10px;
+                padding: 10px 12px;
+                text-align: center;
+                font-weight: 600;
+            }}
+
+            QPushButton:hover {{
+                background: rgba(255,255,255,0.12);
+                border: 1px solid rgba(255,255,255,0.18);
+            }}
+
+            QPushButton:disabled {{
+                background: rgba(0,0,0,0.12);
+                color: rgba(255,255,255,0.6);
+            }}
+
+            QPushButton#ExitButton {{
+                background: {COLOR_WHITE};
+                color: {COLOR_PRIMARY_BLUE};
+                border-radius: 12px;
+                border: 2px solid rgba(0,0,0,0.06);
+            }}
+
+            QPushButton#ExitButton:hover {{
+                background: {COLOR_HOVER};
+                color: {COLOR_WHITE};
+            }}
+
+            QPushButton#HomeButton, QPushButton#CalendarButton, QPushButton#StatisticsButton {{
+                background: rgba(255,255,255,0.06);
+                border-radius: 8px;
+                padding-left: 18px;
+            }}
+
+            /* Avatar circle styling (kept as pixmap but with nicer border) */
+            QLabel {{
+                border-radius: 60px;
+            }}
+        """)
+
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(15, 15, 15, 15)
         self.layout.setSpacing(15)
 
-        self.avatar = QLabel()
+        # Avatar (clickable)
+        self.avatar = ClickableLabel()
         self.avatar.setFixedSize(120, 120)
-        # self.layout.addWidget(self.avatar, alignment=Qt.AlignCenter)
-        # self._create_circular_avatar()
-        
-        # # --- Thông tin người dùng ---
-        # self.user_name_label = QLabel("Tên người dùng")
-        # self.user_name_label.setObjectName("InfoValueLabel")
-        # self.user_name_label.setAlignment(Qt.AlignCenter)
-        # self.layout.addWidget(self.user_name_label)
-        
-        # self.role_label = QLabel("Vai trò")
-        # self.role_label.setObjectName("InfoValueLabel")
-        # self.role_label.setAlignment(Qt.AlignCenter)
-        # self.layout.addWidget(self.role_label)
-
-        # # --- Nút chuyển đổi khu vực ---
-        # self.personal_btn = QPushButton("Khu vực Cá nhân")
-        # self.personal_btn.setObjectName("PersonalButton")
         self.avatar.setAlignment(Qt.AlignCenter)
         self.create_circular_avatar()
         self.layout.addWidget(self.avatar, 0, Qt.AlignCenter)
+        # connect clickable behaviour
+        self.avatar.clicked.connect(self._on_avatar_clicked)
         self.layout.addSpacing(15)
 
+        # Info rows: name + role
+        name_row = QHBoxLayout()
         name_title_label = QLabel("TÊN")
+        name_title_label.setObjectName("InfoTitleLabel")
         self.name_value_label = QLabel("Đang tải...")
-        role_title_label = QLabel("VAI TRÒ")
-        self.role_value_label = QLabel("Đang tải...")
         self.name_value_label.setObjectName("InfoValueLabel")
-        self.role_value_label.setObjectName("InfoValueLabel")
-        self.layout.addWidget(name_title_label)
-        self.layout.addWidget(self.name_value_label)
-        self.layout.addSpacing(10)
-        self.layout.addWidget(role_title_label)
-        self.layout.addWidget(self.role_value_label)
+        self.name_value_label.setAlignment(Qt.AlignCenter)
+        self.name_value_label.setMinimumWidth(140)
+        name_row.addWidget(name_title_label, 0)
+        name_row.addWidget(self.name_value_label, 1)
+        self.layout.addLayout(name_row)
+        self.layout.addSpacing(6)
+
+        role_row = QHBoxLayout()
+        role_title_label = QLabel("VAI TRÒ")
+        role_title_label.setObjectName("InfoTitleLabel")
+        self.role_value_label = QLabel("Đang tải...")
+        # set pill style name for visual highlight
+        self.role_value_label.setObjectName("RolePill")
+        self.role_value_label.setAlignment(Qt.AlignCenter)
+        self.role_value_label.setMinimumWidth(140)
+        role_row.addWidget(role_title_label, 0)
+        role_row.addWidget(self.role_value_label, 1)
+        self.layout.addLayout(role_row)
         self.layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
+        # Area switch buttons
         self.personal_btn = QPushButton("KHU VỰC CÁ NHÂN")
         self.group_btn = QPushButton("KHU VỰC NHÓM")
 
         self.layout.addWidget(self.personal_btn)
-
-        # self.group_btn = QPushButton("Khu vực Nhóm")
-        # self.group_btn.setObjectName("GroupButton")
         self.layout.addWidget(self.group_btn)
 
         self.member_list_btn = QPushButton("Danh sách thành viên")
         self.add_member_btn = QPushButton("Thêm thành viên")
         self.layout.addWidget(self.member_list_btn)
         self.layout.addWidget(self.add_member_btn)
-        
-        
+
         self.member_list_btn.hide()
         self.add_member_btn.hide()
-        
+
         self.layout.addStretch(1)
         
 
@@ -139,6 +229,21 @@ class SidePanel(QFrame):
         
         self.update_view('personal')
 
+        # Improve button sizing/presence: make buttons wider and more prominent
+        btns = [
+            self.personal_btn, self.group_btn,
+            self.member_list_btn, self.add_member_btn,
+            self.home_button, self.calendar_button,
+            self.statistics_button, self.exit_button
+        ]
+        for b in btns:
+            b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            b.setMinimumHeight(44)
+            b.setCursor(Qt.PointingHandCursor)
+            # ensure objectName exists for targeted styling if missing
+            if not b.objectName():
+                b.setObjectName(b.text().replace(' ', '') + "Btn")
+
         
 
         # self.exit_btn = QPushButton("EXIT")
@@ -151,6 +256,59 @@ class SidePanel(QFrame):
         """
         self.name_value_label.setText(user_name)
         self.role_value_label.setText(role)
+
+    # Signal to notify parent that avatar path changed (persistence handled by parent)
+    from PyQt5.QtCore import pyqtSignal
+    avatar_changed = pyqtSignal(str)
+
+    def _on_avatar_clicked(self):
+        """Open a file dialog to choose an image and set it as avatar."""
+        path, _ = QFileDialog.getOpenFileName(self, "Chọn ảnh đại diện", "", "Images (*.png *.jpg *.jpeg *.bmp)")
+        if path:
+            self.set_avatar_from_path(path)
+            # emit signal so parent can persist path if needed
+            try:
+                self.avatar_changed.emit(path)
+            except Exception:
+                pass
+
+    def set_avatar_from_path(self, path: str):
+        """Load image from path, mask to circle and set on avatar label."""
+        src = QPixmap(path)
+        if src.isNull():
+            return
+
+        size = self.avatar.size()
+        # Create target pixmap with transparent background
+        target = QPixmap(size)
+        target.fill(Qt.transparent)
+
+        painter = QPainter(target)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        # Clip to circular path
+        rect = QRectF(0.0, 0.0, float(size.width()), float(size.height()))
+        path = QPainterPath()
+        path.addEllipse(rect)
+        painter.setClipPath(path)
+
+        # Draw the source image scaled and centered to cover the circle
+        src_scaled = src.scaled(size.width(), size.height(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+        # center the scaled pixmap
+        sx = (src_scaled.width() - size.width()) // 2
+        sy = (src_scaled.height() - size.height()) // 2
+        painter.drawPixmap(-sx, -sy, src_scaled)
+
+        # Optional: draw a subtle border around the circle
+        pen = QPen(QColor(255, 255, 255, 200))
+        pen.setWidth(3)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(rect.adjusted(1.0, 1.0, -1.0, -1.0))
+
+        painter.end()
+
+        self.avatar.setPixmap(target)
         
     def _create_circular_avatar(self):
         """

@@ -9,6 +9,9 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout,
                              QSizePolicy, QStackedWidget, QDialog)
 from PyQt5.QtCore import QDate, Qt
 from PyQt5.QtGui import QGuiApplication
+import shutil
+from pathlib import Path
+import os
 
 # --- Nhập các module và widget tùy chỉnh của dự án ---
 from MainMenu.side_panel import SidePanel
@@ -204,7 +207,13 @@ class MainWindow(QMainWindow):
         self.side_panel.member_list_requested.connect(self._show_member_list)
         self.side_panel.add_member_requested.connect(self._add_member)
         self.side_panel.statistics_requested.connect(self.show_statistics_page)
+        
+        # Kết nối tín hiệu avatar_changed để MainWindow lưu ảnh đại diện vào hệ thống tệp
+        self.side_panel.avatar_changed.connect(self._on_avatar_changed)
 
+        # Sau khi đã thiết lập SidePanel, cố gắng load avatar nếu đã tồn tại
+        self.load_user_avatar_if_exists()
+    
     def vi_tri_screen(self):
         """Chỉnh cửa sổ chính phù hợp vị trí màn hình."""
         screen = QGuiApplication.primaryScreen()
@@ -277,7 +286,7 @@ class MainWindow(QMainWindow):
         try:
             leader_id = self.db.get_group_leader(self.current_group_id)
             self.is_leader_of_current_group = (self.user_id == leader_id)
-            role = "Quản trị viên" if self.is_leader_of_current_group else "Thành viên"
+            role = "Trưởng Nhóm" if self.is_leader_of_current_group else "Thành viên"
             self.side_panel.set_user_info(self.user_name, role)
             self.side_panel.update_view(self.current_view, self.is_leader_of_current_group)
         except Exception as e:
@@ -487,3 +496,56 @@ class MainWindow(QMainWindow):
         
         # 4. Hiển thị trang thống kê
         self.content_stack.setCurrentWidget(self.statistics_page)
+
+    def _on_avatar_changed(self, src_path: str):
+        """
+        Sao chép ảnh đại diện người dùng từ src_path vào thư mục assets/avatars
+        với tên định dạng user_{user_id}.ext (giữ nguyên đuôi gốc).
+        Nếu đã có ảnh đại diện cho user_id, ghi đè lên.
+        """
+        try:
+            src = Path(src_path)
+            if not src.exists():
+                return
+            avatars_dir = Path(__file__).resolve().parents[2] / 'src' / 'assets' / 'avatars'
+            avatars_dir.mkdir(parents=True, exist_ok=True)
+            ext = src.suffix.lower() or '.png'
+            dest = avatars_dir / f'user_{self.user_id}{ext}'
+            # Overwrite existing avatar for this user
+            shutil.copyfile(str(src), str(dest))
+            try:
+                # Tell side panel to show the newly saved avatar
+                self.side_panel.set_avatar_from_path(str(dest))
+            except Exception:
+                pass
+        except Exception as e:
+            QMessageBox.warning(self, "Lỗi lưu ảnh", f"Không thể lưu ảnh đại diện: {e}")
+
+    def load_user_avatar_if_exists(self):
+        """
+        Trên hệ thống tệp, tìm ảnh đại diện cho user_id trong assets/avatars.
+        Nếu tìm thấy, tải ảnh này vào SidePanel.
+        """
+        try:
+            avatars_dir = Path(__file__).resolve().parents[2] / 'src' / 'assets' / 'avatars'
+            if not avatars_dir.exists():
+                return
+            # look for any extension (png/jpg/jpeg/bmp)
+            pattern = f'user_{self.user_id}.*'
+            matches = list(avatars_dir.glob(f'user_{self.user_id}.*'))
+            if not matches:
+                return
+            # Prefer common formats by order
+            preferred = None
+            for ext in ['.png', '.jpg', '.jpeg', '.bmp']:
+                for m in matches:
+                    if m.suffix.lower() == ext:
+                        preferred = m
+                        break
+                if preferred:
+                    break
+            if not preferred:
+                preferred = matches[0]
+            self.side_panel.set_avatar_from_path(str(preferred))
+        except Exception:
+            pass

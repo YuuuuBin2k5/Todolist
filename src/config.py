@@ -36,7 +36,7 @@ TEXT_MUTED = "#555555"
 
 # --- UI components in home_page.py ---
 # Icon directory (absolute path to assets/icons)
-ICON_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'icons'))
+ICON_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '.', 'assets', 'icons'))
 
 COLOR_BACKGROUND = "#F4F6F8"
 COLOR_PRIMARY = "#4A90E2"
