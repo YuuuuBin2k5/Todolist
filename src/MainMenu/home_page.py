@@ -71,6 +71,9 @@ class TaskItemWidget(QFrame):
 
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(10, 5, 10, 5)
+        self.priority_indicator = QLabel()
+        self.priority_indicator.setFixedSize(16, 16)
+        main_layout.addWidget(self.priority_indicator)
         
         content_layout = QVBoxLayout()
         title_label = QLabel(self.task_data['title'])
@@ -90,8 +93,13 @@ class TaskItemWidget(QFrame):
         details_text = []
  
         priority = self.task_data.get('priority', 4)
+        priority_color = PRIORITY_COLORS.get(priority, "#808080")
+        self.priority_indicator.setStyleSheet(f"background-color: {priority_color}; border-radius: 8px;")
+        
+        priority_map_text = {1: "Ưu tiên Cao nhất", 2: "Ưu tiên Cao", 3: "Ưu tiên Vừa", 4: "Ưu tiên Thấp"}
+        self.priority_indicator.setToolTip(priority_map_text.get(priority, "Không có ưu tiên"))
         if priority < 4:
-            priority_color = PRIORITY_COLORS.get(priority, COLOR_TEXT_SECONDARY)
+            # priority_color = PRIORITY_COLORS.get(priority, COLOR_TEXT_SECONDARY)
             details_text.append(f"<b style='color:{priority_color};'>P{priority}</b>")
 
         assignee_name = self.task_data.get('assignee_name')
