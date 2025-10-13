@@ -192,6 +192,54 @@ class CalendarWidget(QWidget):
             widget_to_remove = layout_item.widget()
             if widget_to_remove is not None:
                 widget_to_remove.deleteLater()
+    
+    def open_day_detail(self, day_number: int):
+        """
+        Mở một cửa sổ chi tiết (DayDetailDialog) để hiển thị tất cả công việc cho một ngày cụ thể.
+        
+        Args:
+            day_number (int): Số ngày trong tháng (ví dụ: 1, 15, 31).
+        """
+        try:
+            # Import dialog ở đây để tránh lỗi import vòng tròn (circular import)
+            from MainMenu.components import DayDetailDialog
+            
+            # Chuẩn bị một danh sách để lưu trữ thông tin các công việc của ngày đó
+            tasks_for_day = []
+            
+            # Lặp qua lưới lịch để tìm đúng DayWidget tương ứng với ngày được click
+            for row in range(1, self.calendar_grid_layout.rowCount()):
+                for col in range(self.calendar_grid_layout.columnCount()):
+                    layout_item = self.calendar_grid_layout.itemAtPosition(row, col)
+                    # Kiểm tra xem có phải là DayWidget không
+                    if layout_item and isinstance(layout_item.widget(), DayWidget):
+                        day_widget = layout_item.widget()
+                        # Nếu tìm thấy đúng ngày
+                        if int(day_widget.date_label.text()) == day_number:
+                            # Lặp qua tất cả các TaskBadge bên trong DayWidget đó
+                            for i in range(day_widget.tasks_layout.count()):
+                                task_badge = day_widget.tasks_layout.itemAt(i).widget()
+                                if task_badge:
+                                    # Trích xuất thông tin từ TaskBadge và thêm vào danh sách
+                                    tasks_for_day.append({
+                                        'title': task_badge.task_title,
+                                        'is_done': task_badge.checkbox.isChecked(),
+                                        'note': task_badge.note_text,
+                                        'assignee_name': task_badge.assignee_name,
+                                        'task_id': task_badge.task_id,
+                                        'is_group': task_badge.is_group_task
+                                    })
+                            break  # Dừng tìm kiếm khi đã tìm thấy ngày
+            
+            # Tạo đối tượng ngày đầy đủ (năm, tháng, ngày)
+            full_date = datetime(self.current_display_date.year, self.current_display_date.month, day_number)
+            
+            # Tạo và hiển thị cửa sổ chi tiết với danh sách công việc đã thu thập
+            dialog = DayDetailDialog(full_date, tasks_for_day, calendar_ref=self)
+            dialog.exec_()
+            
+        except Exception as error:
+            print(f"Lỗi khi mở cửa sổ chi tiết ngày: {error}")
 
     def setup_weekday_headers(self):
         """
