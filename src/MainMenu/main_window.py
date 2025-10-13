@@ -5,11 +5,12 @@
 """
 
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, 
-                             QVBoxLayout, QLabel, QMessageBox, QFileDialog, 
+                             QVBoxLayout, QLabel, QMessageBox, 
                              QSizePolicy, QStackedWidget, QDialog)
 from PyQt5.QtCore import QDate, Qt
+from PyQt5.QtGui import QGuiApplication
 
-# Import các lớp widget đã được module hóa từ các file khác
+# --- Nhập các module và widget tùy chỉnh của dự án ---
 from MainMenu.side_panel import SidePanel
 from MainMenu.calendar_widget import CalendarWidget
 from MainMenu.statistics_page import StatisticsPage
@@ -19,8 +20,9 @@ from MainMenu.group_dialogs import GroupSelectionDialog, MemberListDialog, AddMe
 from config import *
 
 
-# Định nghĩa một chuỗi chứa mã CSS (QSS) để tạo kiểu cho toàn bộ ứng dụng
-# ĐÃ HỢP NHẤT TỪ CẢ HAI FILE
+# ==============================================================================
+# STYLESHEET (QSS) - Dùng để định dạng giao diện cho toàn bộ cửa sổ
+# ==============================================================================
 STYLESHEET = """
     /* --- Kiểu chung --- */
     #MainWindow { background-color: #f0f0f0; } /* Nền cửa sổ chính */
@@ -90,10 +92,14 @@ STYLESHEET = """
     }
 """
 
+# ==============================================================================
+# LỚP 1: MainWindow - Cửa sổ chính của ứng dụng
+# ==============================================================================
 class MainWindow(QMainWindow):
     """
         Cửa sổ chính của ứng dụng To-do List.
         Chứa thanh bên (SidePanel) và khu vực hiển thị nội dung (HomePage hoặc Calendar).
+        Đây là "trung tâm điều khiển" của ứng dụng sau khi người dùng đăng nhập.
     """
 
     def __init__(self, user_id, user_name, default_role='Cá nhân', parent=None):
@@ -101,30 +107,120 @@ class MainWindow(QMainWindow):
             Khởi tạo cửa sổ chính.
         """
         super().__init__(parent)
+
+        # --- Các biến trạng thái (state) của cửa sổ ---
         self.user_id = user_id
         self.user_name = user_name
         self.default_role = default_role
-        self.current_view = 'personal'
-        self.current_content = 'home'
+
+        self.current_view = 'personal' # 'personal' hoặc 'group'
+        self.current_content = 'home' # 'home' hoặc 'calendar' hoặc 'statistics'
+
         self.current_group_id = None
         self.current_group_name = None
         self.is_leader_of_current_group = False
-        self._is_logging_out = False
+        self._is_logging_out = False # Cờ để kiểm soát việc đăng xuất
 
+        # Tạo một đối tượng quản lý CSDL duy nhất để chia sẻ cho các widget con
+        self.db = Database()
+
+
+         # Cài đặt thuộc tính cơ bản cho cửa sổ
         self.setWindowTitle("To-do List")
         self.setGeometry(100, 100, 1200, 800)
         self.setStyleSheet(STYLESHEET)
         self.setObjectName("MainWindow")
 
-        self.db = Database()
-
-        self.initUI()
+        self.initUI() # Bắt đầu xây dựng giao diện người dùng
+        # Đặt cửa sổ chính ở giữa màn hình
+        self.vi_tri_screen()
+        
+        # Cập nhật thông tin ban đầu cho SidePanel
         self.side_panel.set_user_info(self.user_name, self.default_role)
         self.side_panel.update_view(self.current_view, False)  # Khởi tạo với personal view, không phải leader
         # Ensure home widget uses the shared Database instance
         try:
             if hasattr(self.home_widget, 'load_data_from_db'):
                 self.home_widget.load_data_from_db()
+        except Exception:
+            pass
+
+    def initUI(self):
+        """
+            Thiết lập giao diện người dùng cho cửa sổ chính.
+        """
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+
+        # Layout chính, chia cửa sổ thành 2 phần: thanh bên và nội dung
+        self.main_layout = QHBoxLayout(self.central_widget)
+        self.main_layout.setSpacing(0)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Thanh điều hướng bên trái
+        self.side_panel = SidePanel()
+        self.main_layout.addWidget(self.side_panel)
+        
+        # Panel bên phải, chứa tiêu đề nhóm và QStackedWidget
+        right_panel_layout = QVBoxLayout()
+        right_panel_layout.setContentsMargins(10, 0, 10, 10) # Thêm chút padding
+        right_panel_layout.setSpacing(10)
+
+        # Nhãn hiển thị tên nhóm (mặc định sẽ bị ẩn)
+        self.group_title_label = QLabel("Tên Nhóm")
+        self.group_title_label.setObjectName("GroupTitleLabel")
+        self.group_title_label.setFixedHeight(40)
+        self.group_title_label.setAlignment(Qt.AlignCenter)
+        right_panel_layout.addWidget(self.group_title_label)
+        self.group_title_label.hide()
+
+        # StackedWidget để chuyển đổi giữa trang chủ và lịch
+        self.content_stack = QStackedWidget()
+        self.content_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        right_panel_layout.addWidget(self.content_stack)
+        self.main_layout.addLayout(right_panel_layout, 1)
+
+        # Khu vực trang chủ
+        self.home_widget = DoNowView(self.user_id, db=self.db)
+        self.content_stack.addWidget(self.home_widget)
+
+        # Khu vực thống kê
+        self.statistics_page = StatisticsPage()
+        self.content_stack.addWidget(self.statistics_page)
+
+        # Khu vực lịch
+        self.calendar_widget = CalendarWidget(self.user_id, self.db)
+        self.content_stack.addWidget(self.calendar_widget)
+
+        # Mặc định hiển thị trang chủ
+        self.content_stack.setCurrentWidget(self.home_widget)
+        
+        # Kết nối các tín hiệu từ SidePanel
+        self.side_panel.personal_area_requested.connect(self._handle_personal_view)
+        self.side_panel.group_area_requested.connect(self._handle_group_view)
+        self.side_panel.home_requested.connect(self._handle_home_view)
+        self.side_panel.calendar_requested.connect(self._handle_calendar_view)
+        self.side_panel.exit_requested.connect(self._prompt_for_exit)
+        self.side_panel.member_list_requested.connect(self._show_member_list)
+        self.side_panel.add_member_requested.connect(self._add_member)
+        self.side_panel.statistics_requested.connect(self.show_statistics_page)
+
+    def vi_tri_screen(self):
+        """Chỉnh cửa sổ chính phù hợp vị trí màn hình."""
+        screen = QGuiApplication.primaryScreen()
+        if not screen:
+            return
+        screen_geo = screen.availableGeometry()
+        win_geo = self.frameGeometry()
+        center_point = screen_geo.center()
+        win_geo.moveCenter(center_point)
+        self.move(win_geo.topLeft())
+
+    def showEvent(self, event):
+        """Đảm bảo căn giữa ngay khi cửa sổ hiển thị (frameGeometry đã chính xác)."""
+        super().showEvent(event)
+        try:
+            self.vi_tri_screen()
         except Exception:
             pass
 
@@ -170,66 +266,6 @@ class MainWindow(QMainWindow):
             # Mở lại cửa sổ đăng nhập
             self.login_window = LoginRegisterApp()
             self.login_window.show()
-
-    def initUI(self):
-        """
-            Thiết lập giao diện người dùng cho cửa sổ chính.
-        """
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-
-        self.main_layout = QHBoxLayout(self.central_widget)
-        self.main_layout.setSpacing(0)
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
-
-        # Thanh điều hướng bên trái
-        self.side_panel = SidePanel()
-        self.main_layout.addWidget(self.side_panel)
-        
-        # Panel bên phải, chứa tiêu đề nhóm và QStackedWidget
-        right_panel_layout = QVBoxLayout()
-        right_panel_layout.setContentsMargins(10, 0, 10, 10) # Thêm chút padding
-        right_panel_layout.setSpacing(10)
-
-        self.group_title_label = QLabel("Tên Nhóm")
-        self.group_title_label.setObjectName("GroupTitleLabel")
-        self.group_title_label.setFixedHeight(40)
-        self.group_title_label.setAlignment(Qt.AlignCenter)
-        right_panel_layout.addWidget(self.group_title_label)
-        self.group_title_label.hide()
-
-        # StackedWidget để chuyển đổi giữa trang chủ và lịch
-        self.content_stack = QStackedWidget()
-        self.content_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        right_panel_layout.addWidget(self.content_stack)
-        self.main_layout.addLayout(right_panel_layout, 1)
-
-        # Trang chủ
-        # Pass shared Database helper into DoNowView to avoid multiple DB instances
-        self.home_widget = DoNowView(self.user_id, db=self.db)
-        self.content_stack.addWidget(self.home_widget)
-
-        #Khu vực thống kê
-        self.statistics_page = StatisticsPage()
-        self.content_stack.addWidget(self.statistics_page)
-
-        # Khu vực lịch
-        # Use the shared Database helper and pass it to CalendarWidget
-        self.calendar_widget = CalendarWidget(self.user_id, self.db)
-        self.content_stack.addWidget(self.calendar_widget)
-
-        # Mặc định hiển thị trang chủ
-        self.content_stack.setCurrentWidget(self.home_widget)
-        
-        # Kết nối các tín hiệu từ SidePanel
-        self.side_panel.personal_area_requested.connect(self._handle_personal_view)
-        self.side_panel.group_area_requested.connect(self._handle_group_view)
-        self.side_panel.home_requested.connect(self._handle_home_view)
-        self.side_panel.calendar_requested.connect(self._handle_calendar_view)
-        self.side_panel.exit_requested.connect(self._prompt_for_exit)
-        self.side_panel.member_list_requested.connect(self._show_member_list)
-        self.side_panel.add_member_requested.connect(self._add_member)
-        self.side_panel.statistics_requested.connect(self.show_statistics_page)
 
     def _load_group_context(self, group_id, group_name):
         self.current_view = 'group'
