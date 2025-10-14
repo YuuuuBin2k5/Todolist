@@ -147,15 +147,15 @@ class CalendarWidget(QWidget):
         except Exception:
             return []
 
-        def _parse_iso_datetime(self, s: str):
-                """Cố gắng parse nhiều dạng chuỗi datetime kiểu ISO sang đối tượng datetime.
+    def _parse_iso_datetime(self, s: str):
+        """Cố gắng parse nhiều dạng chuỗi datetime kiểu ISO sang đối tượng datetime.
 
-                Hỗ trợ các định dạng như:
-                    - 2025-10-06 05:24:08
-                    - 2025-10-06T05:24:08Z
-                    - 2025-10-06
-                Trả về datetime hoặc None nếu không parse được.
-                """
+        Hỗ trợ các định dạng như:
+            - 2025-10-06 05:24:08
+            - 2025-10-06T05:24:08Z
+            - 2025-10-06
+        Trả về datetime hoặc None nếu không parse được.
+        """
         if not s:
             return None
         if isinstance(s, datetime):

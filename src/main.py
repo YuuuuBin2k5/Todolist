@@ -12,7 +12,7 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     
     # --- Tải và áp dụng font chữ với đường dẫn ĐÚNG ---
-    # Use centralized FONT_PATH from config
+    # Sử dụng FONT_PATH tập trung từ config
     font_id = QFontDatabase.addApplicationFont(FONT_PATH)
     
     if font_id < 0:
@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
     # Tạo và hiển thị cửa sổ đăng nhập
     window = LoginRegisterApp()
-    # Set application/window icon (use bundled icon if available)
+    # Đặt icon cho ứng dụng/cửa sổ (sử dụng icon bundled nếu có)
     try:
         icon_path = 'src/assets/images/window_icon.png'
         window.setWindowIcon(QIcon(icon_path))

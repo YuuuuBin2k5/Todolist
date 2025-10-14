@@ -54,7 +54,7 @@ class GroupSelectionDialog(QDialog):
                 db = Database()
                 gid = db.create_group(group_name, self.user_id)
                 if gid:
-                    # ensure leader is in group_members
+                    # đảm bảo leader ở trong group_members
                     db.add_group_member(gid, self.user_id)
                     QMessageBox.information(self, "Thành công", f"Đã tạo nhóm '{group_name}' thành công.")
                     self.load_groups()
@@ -89,16 +89,16 @@ class MemberListDialog(QDialog):
             db = Database()
             members = db.get_group_members(group_id)
             for row in members:
-                # Support rows that are either (user_id, user_name) or (user_id, user_name, email)
+                # Hỗ trợ các hàng là (user_id, user_name) hoặc (user_id, user_name, email)
                 try:
                     uid = row[0]
                     name = row[1] if len(row) > 1 else str(uid)
                     email = row[2] if len(row) > 2 else None
                 except Exception:
-                    # fallback: skip malformed row
+                    # fallback: bỏ qua hàng malformed
                     continue
                 if not email:
-                    # try to fetch email from user record if missing
+                    # thử lấy email từ user record nếu thiếu
                     try:
                         user = db.get_user_by_id(uid)
                         email = user[2] if user and len(user) > 2 else 'unknown'
@@ -147,7 +147,7 @@ class AddMemberDialog(QDialog):
             except Exception as e:
                 QMessageBox.warning(self, "Lỗi", f"Không thể thêm thành viên: {e}")
             except Exception as e:
-                # Integrity or other DB errors
+                # Lỗi toàn vẹn hoặc lỗi DB khác
                 QMessageBox.warning(self, "Lỗi", f"Không thể thêm thành viên: {e}")
         except Exception as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Không thể truy xuất dữ liệu: {e}")

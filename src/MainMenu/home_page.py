@@ -176,7 +176,7 @@ class DoNowView(QWidget):
         
         # [THÊM] State để lưu priority được chọn trong form
         self.current_priority = 4
-        # Ensure view context defaults exist so callers can safely query
+        # Đảm bảo ngữ cảnh view mặc định tồn tại để caller có thể truy vấn an toàn
         self.view_mode = 'personal'
         self.group_id = None
         self.is_leader = False
@@ -238,7 +238,7 @@ class DoNowView(QWidget):
 
         add_btn = QPushButton("Add Task")
         add_btn.setObjectName("MainCTA")
-        # expose to instance so set_view_context can enable/disable or hide/show
+        # hiển thị cho instance để set_view_context có thể enable/disable hoặc hide/show
         self.add_btn = add_btn
 
         layout.addWidget(self.title_input, 0, 0, 1, 3)
@@ -251,10 +251,10 @@ class DoNowView(QWidget):
         
         add_btn.clicked.connect(self._handle_add_task)
         self.title_input.returnPressed.connect(self._handle_add_task)
-        # expose group container for title changes
+        # hiển thị group container để thay đổi tiêu đề
         self.group = group
 
-        # initial visibility depending on current view_mode (covers case when widget is created in group mode)
+        # hiển thị ban đầu tùy thuộc vào view_mode hiện tại (bao gồm trường hợp widget được tạo ở chế độ nhóm)
         try:
             if getattr(self, 'view_mode', 'personal') == 'group':
                 self.priority_button.hide()
@@ -272,12 +272,12 @@ class DoNowView(QWidget):
         self.view_mode = mode
         self.group_id = group_id
         self.is_leader = is_leader
-        # hide priority/estimate for group mode
+        # ẩn priority/estimate cho chế độ nhóm
         try:
             if self.view_mode == 'group':
                 self.priority_button.hide()
                 self.estimated_input.hide()
-                # show member selector in group mode
+                # hiển thị member selector ở chế độ nhóm
                 self.member_selector.show()
             else:
                 self.priority_button.show()
@@ -408,7 +408,7 @@ class DoNowView(QWidget):
                         "note": r[6] if len(r) > 6 else ""
                     })
             elif self.view_mode == 'group' and self.group_id:
-                # leader sees all tasks; members see only tasks assigned to them
+                # leader thấy tất cả task; members chỉ thấy task được giao cho họ
                 try:
                     leader_id = self.db.get_group_leader(self.group_id)
                 except Exception:
@@ -416,7 +416,7 @@ class DoNowView(QWidget):
                 rows = self.db.get_group_tasks(self.group_id)
                 for r in rows:
                     assignee_id = r[2]
-                    # if not leader and task is not assigned to current user, skip
+                    # nếu không phải leader và task không được giao cho user hiện tại, bỏ qua
                     if leader_id is None or self.user_id != leader_id:
                         if assignee_id is None or assignee_id != self.user_id:
                             continue
@@ -432,7 +432,7 @@ class DoNowView(QWidget):
             QMessageBox.critical(self, "Lỗi", f"Không thể tải nhiệm vụ: {e}")
         self.render_tasks()
 
-    # Compatibility wrapper: older callers call `load_data()`
+    # Wrapper tương thích: caller cũ gọi `load_data()`
     def load_data(self):
         """Backward-compatible alias used by MainWindow: load and render tasks."""
         self.load_data_from_db()
@@ -531,7 +531,7 @@ class DoNowView(QWidget):
                 )
             elif self.view_mode == 'group' and self.is_leader:
                 assignee_id = self.member_selector.currentData()
-                # Use keyword args to avoid parameter ordering bugs (creator_id must be second param)
+                # Sử dụng keyword args để tránh lỗi thứ tự tham số (creator_id phải là tham số thứ hai)
                 self.db.add_group_task(
                     self.group_id,
                     creator_id=self.user_id,
@@ -548,7 +548,7 @@ class DoNowView(QWidget):
             self.note_input.clear()
             self._set_priority(4)
             self.load_data_from_db()
-            # If calendar is open in the main window, refresh it so newly-added tasks appear
+            # Nếu lịch đang mở trong main window, refresh để task mới thêm xuất hiện
             try:
                 win = self.window()
                 cw = getattr(win, 'calendar_widget', None)
@@ -567,7 +567,7 @@ class DoNowView(QWidget):
         task = next((t for t in self.tasks if t['id'] == task_id), None)
         if not task: return
         
-        # Check if task is in the past and prevent toggling
+        # Kiểm tra nếu task ở quá khứ và ngăn toggling
         if task.get('due_at'):
             try:
                 due_date = self._parse_iso_datetime(task['due_at'])
@@ -583,7 +583,7 @@ class DoNowView(QWidget):
                 self.db.update_task_status(int(task_id), int(new_status))
             elif self.view_mode == 'group':
                 self.db.update_group_task_status(int(task_id), int(new_status))
-                # also refresh calendar if visible
+                # cũng refresh lịch nếu visible
                 try:
                     win = self.window()
                     cw = getattr(win, 'calendar_widget', None)
@@ -607,7 +607,7 @@ class DoNowView(QWidget):
     def _handle_delete_task(self, task_id):
         try:
             if self.view_mode == 'personal':
-                # only owner can delete personal task
+                # chỉ owner có thể xóa task cá nhân
                 try:
                     data = self.db.get_task_by_id(int(task_id))
                     if data and data[1] != self.user_id:
@@ -617,7 +617,7 @@ class DoNowView(QWidget):
                     pass
                 self.db.delete_task(int(task_id))
             elif self.view_mode == 'group':
-                # only group leader can delete group tasks
+                # chỉ group leader có thể xóa task nhóm
                 try:
                     leader_id = self.db.get_group_leader(self.group_id)
                     if leader_id is None or leader_id != self.user_id:
@@ -632,7 +632,7 @@ class DoNowView(QWidget):
             if task_id in self.meta: del self.meta[task_id]
             if task_id in self.history: del self.history[task_id]
             self.render_tasks()
-            # notify calendar to refresh
+            # thông báo calendar refresh
             try:
                 win = self.window()
                 cw = getattr(win, 'calendar_widget', None)

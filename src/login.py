@@ -23,7 +23,7 @@ def is_valid_email(email: str) -> bool:
     if not email or not isinstance(email, str):
         return False
     email = email.strip()
-    # Basic pattern: local@domain.tld (no spaces), allow common characters
+    # Mẫu cơ bản: local@domain.tld (không có khoảng trắng), cho phép các ký tự phổ biến
     pattern = r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
     return re.match(pattern, email) is not None
 
@@ -114,12 +114,12 @@ class ForgotPasswordDialog(QDialog):
         title.setFont(QFont("Arial", 16, QFont.Bold))
         
         self.email_input = QLineEdit(placeholderText="Email")
-        # inline validation label
+        # nhãn xác thực inline
         self.email_error_label = QLabel("")
         self.email_error_label.setStyleSheet('color: red; font-size: 12px;')
         self.email_error_label.setVisible(False)
         send_code_btn = QPushButton("Gửi mã xác thực")
-        # validate as user types
+        # xác thực khi user nhập
         self.email_input.textChanged.connect(self._on_email_input_changed)
         send_code_btn.clicked.connect(self.handle_send_code)
         
@@ -198,7 +198,7 @@ class ForgotPasswordDialog(QDialog):
         if not self.email:
             QMessageBox.warning(self, "Lỗi", "Vui lòng nhập email.")
             return
-        # Validate format first
+        # Xác thực định dạng trước
         if not is_valid_email(self.email):
             QMessageBox.warning(self, "Email không hợp lệ", "Vui lòng nhập địa chỉ email hợp lệ.")
             return
@@ -308,7 +308,7 @@ class LoginRegisterApp(QMainWindow):
         self.stacked_forms.setStyleSheet("background-color: transparent;")
         self.sign_in_form, self.email_input_signin, self.password_input_signin = self.create_form("Đăng Nhập", "hoặc sử dụng mật khẩu email của bạn")
         self.sign_up_form, self.name_input_signup, self.email_input_signup, self.password_input_signup, self.password_strength_label, self.email_error_label_signup = self.create_form("Đăng Ký", "hoặc sử dụng email của bạn để đăng ký")
-        # wire live validation for signup email
+        # kết nối xác thực trực tiếp cho email đăng ký
         try:
             if getattr(self, 'email_input_signup', None):
                 self.email_input_signup.textChanged.connect(self._on_signup_email_changed)
@@ -413,7 +413,7 @@ class LoginRegisterApp(QMainWindow):
             QMessageBox.warning(self, "Lỗi", "Vui lòng điền đầy đủ tất cả các trường.")
             return
 
-        # Validate email format
+        # Xác thực định dạng email
         if not is_valid_email(email):
             QMessageBox.warning(self, "Email không hợp lệ", "Vui lòng nhập địa chỉ email hợp lệ.")
             return
@@ -460,7 +460,7 @@ class LoginRegisterApp(QMainWindow):
         layout.addWidget(subtitle_label)
         email_input = QLineEdit(placeholderText="Email")
         email_input.setStyleSheet(f"padding: 10px; height: 40px; border: none; background-color: {INPUT_BG}; border-radius: 8px;")
-        # inline email error label to show validation messages (hidden by default)
+        # nhãn lỗi email inline để hiển thị thông báo xác thực (ẩn theo mặc định)
         email_error_label = QLabel("")
         email_error_label.setStyleSheet('color: red; font-size: 12px;')
         email_error_label.setVisible(False)
@@ -501,7 +501,7 @@ class LoginRegisterApp(QMainWindow):
             password_input.returnPressed.connect(button.click)
         layout.addWidget(button, alignment=Qt.AlignCenter)
         if "Đăng Ký" in title:
-            # expose the email_error_label so caller can wire live validation
+            # hiển thị email_error_label để caller có thể kết nối xác thực trực tiếp
             return widget, name_input, email_input, password_input, strength_label, email_error_label
         else:
             return widget, email_input, password_input
@@ -509,7 +509,7 @@ class LoginRegisterApp(QMainWindow):
     def _on_signup_email_changed(self, text: str):
         try:
             txt = (text or '').strip()
-            # email_error_label_signup is set in __init__ when creating the signup form
+            # email_error_label_signup được set trong __init__ khi tạo form đăng ký
             if not hasattr(self, 'email_error_label_signup'):
                 return
             lbl = self.email_error_label_signup
@@ -568,7 +568,7 @@ class LoginRegisterApp(QMainWindow):
         password = self.password_input_signin.text()
         
         try:
-            # Use Database helper for authentication
+            # Sử dụng Database helper để xác thực
             db = Database()
             user = db.get_login_user(email, password)
             if user:
@@ -592,25 +592,14 @@ class LoginRegisterApp(QMainWindow):
         if not name or not email or not password:
             QMessageBox.warning(self, "Lỗi", "Vui lòng điền đầy đủ tất cả các trường.")
             return
-        strength, _ = self._evaluate_password_strength(password)
-        if strength != "Mạnh":
+        strength_text, _, _ = self._evaluate_password_strength_detailed(password)
+        if strength_text != "Rất mạnh":
             QMessageBox.warning(self, "Mật khẩu yếu", "Vui lòng tạo một mật khẩu mạnh hơn trước khi đăng ký.")
             return
 
         try:
             db = Database()
             created_id = db.create_user(name, password, email)
-            if created_id is not None:
-                QMessageBox.information(self, "Thành công", "Đăng ký thành công! Vui lòng đăng nhập.")
-                self.show_sign_in()
-            else:
-                QMessageBox.warning(self, "Lỗi", "Email này đã tồn tại hoặc không thể tạo tài khoản.")
-        except Exception as e:
-            QMessageBox.critical(self, "Lỗi CSDL", f"Lỗi khi kết nối hoặc truy vấn CSDL: {e}")
-        try:
-            db = Database()
-            created_id = db.create_user(name, password, email)
-            # create_user trả về user_id (int) khi thành công, hoặc None khi lỗi
             if created_id is not None:
                 QMessageBox.information(self, "Thành công", "Đăng ký thành công! Vui lòng đăng nhập.")
                 self.show_sign_in()

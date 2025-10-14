@@ -130,11 +130,11 @@ class MainWindow(QMainWindow):
          # Cài đặt thuộc tính cơ bản cho cửa sổ
         self.setWindowTitle("To-do List")
         self.setGeometry(100, 100, 1600, 900)
-        # Fix the main window size so it's not resizable by the user
+        # Cố định kích thước cửa sổ chính để người dùng không thể thay đổi kích thước
         try:
             self.setFixedSize(1600, 900)
         except Exception:
-            # Older PyQt versions may behave differently; ignore if not supported
+            # Các phiên bản PyQt cũ hơn có thể hoạt động khác nhau; bỏ qua nếu không được hỗ trợ
             pass
         self.setStyleSheet(STYLESHEET)
         self.setObjectName("MainWindow")
@@ -146,7 +146,7 @@ class MainWindow(QMainWindow):
         # Cập nhật thông tin ban đầu cho SidePanel
         self.side_panel.set_user_info(self.user_name, self.default_role)
         self.side_panel.update_view(self.current_view, False)  # Khởi tạo với personal view, không phải leader
-        # Ensure home widget uses the shared Database instance
+        # Đảm bảo widget trang chủ sử dụng instance Database được chia sẻ
         try:
             if hasattr(self.home_widget, 'load_data_from_db'):
                 self.home_widget.load_data_from_db()
@@ -239,17 +239,17 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         try:
-            # Protect against child widgets requesting overly large sizeHints by
-            # capping the content area to the available screen width minus the side panel.
+            # Bảo vệ chống lại các widget con yêu cầu sizeHints quá lớn bằng cách
+            # giới hạn khu vực nội dung theo chiều rộng màn hình có sẵn trừ đi thanh bên.
             screen = QGuiApplication.primaryScreen()
             if screen and hasattr(self, 'content_stack'):
                 try:
                     screen_geo = screen.availableGeometry()
                     screen_w = screen_geo.width()
                     side_w = self.side_panel.frameGeometry().width() if hasattr(self, 'side_panel') else 300
-                    # leave some margin for window frame
+                    # để lại một chút lề cho khung cửa sổ
                     avail = max(400, screen_w - side_w - 80)
-                    # apply cap to content stack and calendar widget to prevent expansion
+                    # áp dụng giới hạn cho stack nội dung và widget lịch để ngăn mở rộng
                     try:
                         self.content_stack.setMaximumWidth(avail)
                     except Exception:
@@ -355,14 +355,14 @@ class MainWindow(QMainWindow):
         # Cập nhật dữ liệu cho trang hiện tại
         if self.current_content == 'home':
             self.home_widget.user_id = self.user_id
-            # Ensure home page is reset to personal context and reload data
+            # Đảm bảo trang chủ được reset về ngữ cảnh cá nhân và tải lại dữ liệu
             try:
                 self.home_widget.set_view_context(mode='personal')
             except Exception:
                 pass
             self.home_widget.load_data_from_db()
         elif self.current_content == 'calendar':
-            # Ensure calendar knows we're in personal mode
+            # Đảm bảo lịch biết chúng ta đang ở chế độ cá nhân
             try:
                 self.calendar_widget.switch_view_mode('personal')
             except Exception:
@@ -462,9 +462,9 @@ class MainWindow(QMainWindow):
                             tasks_by_day[day] = []
                         tasks_by_day[day].append({'task_id': task_id, 'title': title, 'is_done': is_done, 'note': note, 'due_at': due_at_str})
 
-            # Also include group tasks assigned to this user in the same month
-            # Personal view should display only personal tasks.
-            # Do not include group tasks here; group tasks are displayed via the group view.
+            # Cũng bao gồm các task nhóm được giao cho user này trong cùng tháng
+            # Chế độ xem cá nhân chỉ nên hiển thị các task cá nhân.
+            # Không bao gồm task nhóm ở đây; task nhóm được hiển thị qua chế độ xem nhóm.
             self.calendar_widget.populate_calendar(tasks_by_day)
         except Exception as e:
             QMessageBox.critical(self, "Lỗi CSDL", f"Lỗi khi tải công việc cá nhân: {e}")
@@ -477,7 +477,7 @@ class MainWindow(QMainWindow):
         try:
             month_str = self.calendar_widget.current_date.strftime('%Y-%m')
             all_tasks = self.db.get_group_tasks_for_month(group_id, month_str)
-            # Determine whether current user is leader of this group
+            # Xác định xem user hiện tại có phải là leader của nhóm này không
             try:
                 leader_id = self.db.get_group_leader(group_id)
             except Exception:
@@ -486,7 +486,7 @@ class MainWindow(QMainWindow):
             for task in all_tasks:
                 # (task_id, group_id, assignee_id, title, note, is_done, due_at)
                 task_id, group_id, assignee_id, title, note, is_done, due_at_str = task
-                # If current user is not leader, only include tasks assigned to this user
+                # Nếu user hiện tại không phải leader, chỉ bao gồm các task được giao cho user này
                 if leader_id is None or self.user_id != leader_id:
                     if assignee_id is None or assignee_id != self.user_id:
                         continue
@@ -544,15 +544,15 @@ class MainWindow(QMainWindow):
                 return
             avatars_dir = Path(__file__).resolve().parents[2] / 'src' / 'assets' / 'avatars'
             avatars_dir.mkdir(parents=True, exist_ok=True)
-            # Remove any existing avatar files for this user (different extensions)
+            # Xóa bất kỳ file avatar nào hiện có cho user này (các extension khác nhau)
             for old in avatars_dir.glob(f'user_{self.user_id}.*'):
                 old.unlink()
             ext = src.suffix.lower() or '.png'
             dest = avatars_dir / f'user_{self.user_id}{ext}'
-            # Copy new avatar into place
+            # Sao chép avatar mới vào vị trí
             shutil.copyfile(str(src), str(dest))
             try:
-                # Tell side panel to show the newly saved avatar
+                # Yêu cầu side panel hiển thị avatar vừa lưu
                 self.side_panel.set_avatar_from_path(str(dest))
             except Exception:
                 pass
@@ -568,12 +568,12 @@ class MainWindow(QMainWindow):
             avatars_dir = Path(__file__).resolve().parents[2] / 'src' / 'assets' / 'avatars'
             if not avatars_dir.exists():
                 return
-            # look for any extension (png/jpg/jpeg/bmp)
+            # tìm bất kỳ extension nào (png/jpg/jpeg/bmp)
             pattern = f'user_{self.user_id}.*' 
             matches = list(avatars_dir.glob(f'user_{self.user_id}.*'))
             if not matches:
                 return
-            # Prefer common formats by order
+            # Ưu tiên các định dạng phổ biến theo thứ tự
             preferred = None
             for ext in ['.png', '.jpg', '.jpeg', '.bmp']:
                 for m in matches:

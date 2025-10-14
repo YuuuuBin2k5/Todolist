@@ -39,7 +39,7 @@ class SidePanel(QFrame):
 
     # Tín hiệu phát ra khi yêu cầu xem thống kê
     statistics_requested = pyqtSignal()
-    # Signal to notify parent that avatar path changed (persistence handled by parent)
+    # Tín hiệu để thông báo cho parent rằng đường dẫn avatar đã thay đổi (persistence được xử lý bởi parent)
     avatar_changed = pyqtSignal(str)
 
 
@@ -49,7 +49,7 @@ class SidePanel(QFrame):
         self.setFixedWidth(300)
         self.setObjectName("SidePanel")
 
-        # Apply polished blue theme for side panel
+        # Áp dụng chủ đề xanh bóng cho thanh bên
         self.setStyleSheet(f"""
             QFrame#SidePanel {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {COLOR_PRIMARY_BLUE}, stop:1 {COLOR_SECONDARY_BLUE});
@@ -135,17 +135,17 @@ class SidePanel(QFrame):
         self.layout.setContentsMargins(15, 15, 15, 15)
         self.layout.setSpacing(15)
 
-        # Avatar (clickable)
+        # Avatar (có thể click)
         self.avatar = ClickableLabel()
         self.avatar.setFixedSize(120, 120)
         self.avatar.setAlignment(Qt.AlignCenter)
         self.create_circular_avatar()
         self.layout.addWidget(self.avatar, 0, Qt.AlignCenter)
-        # connect clickable behaviour
+        # kết nối hành vi có thể click
         self.avatar.clicked.connect(self._on_avatar_clicked)
         self.layout.addSpacing(15)
 
-        # Info rows: name + role
+        # Hàng thông tin: tên + vai trò
         name_row = QHBoxLayout()
         name_title_label = QLabel("TÊN")
         name_title_label.setObjectName("InfoTitleLabel")
@@ -162,7 +162,7 @@ class SidePanel(QFrame):
         role_title_label = QLabel("VAI TRÒ")
         role_title_label.setObjectName("InfoTitleLabel")
         self.role_value_label = QLabel("Đang tải...")
-        # set pill style name for visual highlight
+        # đặt tên kiểu pill để làm nổi bật trực quan
         self.role_value_label.setObjectName("RolePill")
         self.role_value_label.setAlignment(Qt.AlignCenter)
         self.role_value_label.setMinimumWidth(140)
@@ -171,7 +171,7 @@ class SidePanel(QFrame):
         self.layout.addLayout(role_row)
         self.layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-        # Area switch buttons
+        # Nút chuyển đổi khu vực
         self.personal_btn = QPushButton("KHU VỰC CÁ NHÂN")
         self.group_btn = QPushButton("KHU VỰC NHÓM")
 
@@ -227,7 +227,7 @@ class SidePanel(QFrame):
         
         self.update_view('personal')
 
-        # Improve button sizing/presence: make buttons wider and more prominent
+        # Cải thiện kích thước/sự hiện diện của nút: làm cho nút rộng hơn và nổi bật hơn
         btns = [
             self.personal_btn, self.group_btn,
             self.member_list_btn, self.add_member_btn,
@@ -238,7 +238,7 @@ class SidePanel(QFrame):
             b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             b.setMinimumHeight(44)
             b.setCursor(Qt.PointingHandCursor)
-            # ensure objectName exists for targeted styling if missing
+            # đảm bảo objectName tồn tại để định kiểu mục tiêu nếu thiếu
             if not b.objectName():
                 b.setObjectName(b.text().replace(' ', '') + "Btn")
 
@@ -264,7 +264,7 @@ class SidePanel(QFrame):
         path, _ = QFileDialog.getOpenFileName(self, "Chọn ảnh đại diện", "", "Images (*.png *.jpg *.jpeg *.bmp)")
         if path:
             self.set_avatar_from_path(path)
-            # emit signal so parent can persist path if needed
+            # phát tín hiệu để parent có thể lưu đường dẫn nếu cần
             try:
                 self.avatar_changed.emit(path)
             except Exception:
@@ -277,27 +277,27 @@ class SidePanel(QFrame):
             return
 
         size = self.avatar.size()
-        # Create target pixmap with transparent background
+        # Tạo pixmap đích với nền trong suốt
         target = QPixmap(size)
         target.fill(Qt.transparent)
 
         painter = QPainter(target)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # Clip to circular path
+        # Cắt theo đường tròn
         rect = QRectF(0.0, 0.0, float(size.width()), float(size.height()))
         path = QPainterPath()
         path.addEllipse(rect)
         painter.setClipPath(path)
 
-        # Draw the source image scaled and centered to cover the circle
+        # Vẽ hình ảnh nguồn được scale và căn giữa để phủ kín vòng tròn
         src_scaled = src.scaled(size.width(), size.height(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-        # center the scaled pixmap
+        # căn giữa pixmap đã scale
         sx = (src_scaled.width() - size.width()) // 2
         sy = (src_scaled.height() - size.height()) // 2
         painter.drawPixmap(-sx, -sy, src_scaled)
 
-        # Optional: draw a subtle border around the circle
+        # Tùy chọn: vẽ một viền tinh tế quanh vòng tròn
         pen = QPen(QColor(255, 255, 255, 200))
         pen.setWidth(3)
         painter.setPen(pen)

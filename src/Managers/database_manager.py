@@ -206,7 +206,7 @@ class Database:
 
         Không trả về; commit khi thành công.
         """
-        # Defensive: some DB instances may not have a creator_id (or leader_id) column
+        # Phòng thủ: một số instance DB có thể không có cột creator_id (hoặc leader_id)
         try:
             conn = sqlite3.connect(self.db_path)
             cur = conn.cursor()
@@ -217,7 +217,7 @@ class Database:
         except Exception:
             cols = []
 
-        # prefer column named 'creator_id', fall back to 'leader_id' if present
+        # ưu tiên cột có tên 'creator_id', quay về 'leader_id' nếu có
         has_creator = 'creator_id' in cols or 'leader_id' in cols
         creator_col = 'creator_id' if 'creator_id' in cols else ('leader_id' if 'leader_id' in cols else None)
 
@@ -276,7 +276,7 @@ class Database:
 
     def get_task_by_id(self, task_id: int) -> Optional[Tuple]:
         """Lấy task cá nhân theo id. Trả về row hoặc None."""
-        # include estimate_minutes and priority for UI consumption (backwards compatible)
+        # bao gồm estimate_minutes và priority để UI sử dụng (tương thích ngược)
         query = "SELECT task_id, user_id, title, note, is_done, due_at, estimate_minutes, priority FROM tasks WHERE task_id = ?"
         return self._execute_query(query, (task_id,), fetch="one")
 
