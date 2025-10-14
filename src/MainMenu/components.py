@@ -29,11 +29,11 @@ VIETNAMESE_MONTHS = [
 # LỚP BỊ THIẾU SỐ 1: TaskDetailItemWidget
 # ==============================================================================
 class TaskDetailItemWidget(QFrame):
-    def __init__(self, task_data: dict, calendar_ref=None, parent=None):
-        """Modern IT-style task detail card.
+    """Thẻ chi tiết công việc kiểu hiện đại.
 
-        Displays title, status, assignee, due date, note and a delete action.
-        """
+    Hiển thị: tiêu đề, trạng thái, người được phân công, ngày hết hạn, ghi chú và hành động xóa.
+    """
+    def __init__(self, task_data: dict, calendar_ref=None, parent=None):
         super().__init__(parent)
         self.setObjectName("TaskDetailItem")
         self.setFrameShape(QFrame.StyledPanel)
@@ -48,14 +48,14 @@ class TaskDetailItemWidget(QFrame):
         task_id = task_data.get('task_id')
         is_group = bool(task_data.get('is_group', False))
 
-        # try to fetch latest estimate/priority from DB when possible (only for personal tasks)
+    # Thử lấy dữ liệu estimate/priority mới nhất từ DB khi có thể (chỉ cho công việc cá nhân)
         priority_val = task_data.get('priority')
         estimate_minutes = task_data.get('estimate_minutes') or task_data.get('estimated_minutes') or task_data.get('estimate')
         try:
             # Only query personal tasks from tasks table. Group tasks have different storage and should not be queried here.
             if not is_group and (priority_val is None or estimate_minutes is None) and self.calendar_ref and hasattr(self.calendar_ref, 'db') and task_id:
                 row = self.calendar_ref.db.get_task_by_id(task_id)
-                # row now expected as (task_id, user_id, title, note, is_done, due_at, estimate_minutes, priority)
+                # Dòng trả về kỳ vọng có dạng (task_id, user_id, title, note, is_done, due_at, estimate_minutes, priority)
                 if row:
                     # defensive mapping by length
                     try:
@@ -103,11 +103,11 @@ class TaskDetailItemWidget(QFrame):
                     if assignee_id:
                         pix = load_avatar_pixmap(assignee_id, size=44)
             else:
-                # personal: try to load owner avatar if we have a task_id and DB
+                # Cá nhân: cố gắng tải avatar chủ sở hữu nếu có task_id và DB
                 try:
                     if task_id and self.calendar_ref and hasattr(self.calendar_ref, 'db'):
                         row = self.calendar_ref.db.get_task_by_id(task_id)
-                        # row format from DB: (task_id, user_id, title, note, is_done, due_at)
+                        # Định dạng dòng từ DB: (task_id, user_id, title, note, is_done, due_at)
                         if row and len(row) >= 2:
                             owner_id = row[1]
                             if owner_id:
@@ -385,6 +385,11 @@ class ElidedLabel(QLabel):
 # LỚP 3: TaskWidget (Phiên bản đầy đủ và đã sửa lỗi)
 # ==============================================================================
 class TaskWidget(QFrame):
+    """Widget ngắn cho 1 công việc trong danh sách.
+
+    Hiển thị: tiêu đề, checkbox trạng thái, ghi chú tóm tắt và các nút hành động.
+    Dùng làm base cho các widget task cá nhân và task nhóm.
+    """
     def __init__(self, text, is_done=False, note="", assignee_name=None, parent=None, task_id=None, is_group=False, calendar_ref=None):
         super().__init__(parent)
         self.setObjectName("TaskWidget")

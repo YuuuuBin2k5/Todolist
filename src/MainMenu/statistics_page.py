@@ -73,6 +73,7 @@ class StatItemWidget(QFrame):
         canvas.draw()
 
 class StatisticsPage(QWidget):
+    """Trang thống kê: hiển thị tổng quan tiến độ cá nhân và các nhóm dưới dạng biểu đồ."""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("StatisticsPage")

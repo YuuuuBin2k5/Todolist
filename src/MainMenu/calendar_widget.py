@@ -22,6 +22,11 @@ VIETNAMESE_MONTHS = [
 ]
 
 class CalendarWidget(QWidget):
+    """Widget lịch tháng.
+
+    Hiển thị lưới ngày cho tháng hiện tại, chứa các `DayWidget` và `TaskBadge`.
+    Hỗ trợ hai chế độ xem: 'personal' (công việc cá nhân) và 'group' (công việc nhóm).
+    """
     def __init__(self, user_id, db=None, parent=None):
         super().__init__(parent)
         self.user_id = user_id
@@ -54,7 +59,7 @@ class CalendarWidget(QWidget):
 
     def initUI(self):
         # Modernized header with centered month label inside a pill and prev/next icons
-        # Try to load a bundled font for a nicer look
+    # Thử tải font kèm theo để giao diện đẹp hơn
         try:
             # Prefer centralized FONT_PATH if available
             font_path = FONT_PATH
@@ -103,9 +108,9 @@ class CalendarWidget(QWidget):
         self.main_layout.addLayout(self.grid_layout)
 
     def _get_current_group_id(self):
-        """Return the current group id if set; otherwise try to find a group for the user.
+        """Trả về group id hiện tại nếu đã thiết lập; nếu chưa, cố gắng tìm nhóm cho người dùng.
 
-        This is used by DayWidget when adding group tasks from a day cell.
+        Hàm này được DayWidget sử dụng khi thêm công việc nhóm từ ô lịch.
         """
         if self.current_group_id:
             return self.current_group_id
@@ -118,10 +123,9 @@ class CalendarWidget(QWidget):
         return None
 
     def _get_current_group_members(self) -> list:
-        """Return a list of (user_id, user_name) for the current group.
+        """Trả về danh sách (user_id, user_name) cho nhóm hiện tại.
 
-        Ensure the group leader appears first in the list so the AddTaskDialog
-        shows the leader prominently.
+        Đảm bảo trưởng nhóm nằm đầu danh sách để `AddTaskDialog` hiển thị nổi bật.
         """
         try:
             group_id = self.current_group_id or (self.db.get_groups_for_user(self.user_id) or [None])[0]
@@ -143,15 +147,15 @@ class CalendarWidget(QWidget):
         except Exception:
             return []
 
-    def _parse_iso_datetime(self, s: str):
-        """Try to parse many ISO-like datetime strings into a datetime object.
+        def _parse_iso_datetime(self, s: str):
+                """Cố gắng parse nhiều dạng chuỗi datetime kiểu ISO sang đối tượng datetime.
 
-        Accepts formats like:
-          - 2025-10-06 05:24:08
-          - 2025-10-06T05:24:08Z
-          - 2025-10-06
-        Returns datetime or None on failure.
-        """
+                Hỗ trợ các định dạng như:
+                    - 2025-10-06 05:24:08
+                    - 2025-10-06T05:24:08Z
+                    - 2025-10-06
+                Trả về datetime hoặc None nếu không parse được.
+                """
         if not s:
             return None
         if isinstance(s, datetime):

@@ -5,14 +5,15 @@ from PyQt5.QtCore import Qt, QRectF
 import logging
 
 def load_avatar_pixmap(user_id, size=44):
-    """Return a circular QPixmap for the given user_id if an avatar file exists.
+    """Trả về QPixmap dạng tròn cho `user_id` nếu tồn tại file avatar.
 
-    Looks under src/assets/avatars for files named user_{id}.[png|jpg|jpeg|bmp].
-    Returns a QPixmap of `size` x `size`, or None if no file found or load fails.
+    Tìm trong `src/assets/avatars` các file có tên `user_{id}.[png|jpg|jpeg|bmp]`.
+    Trả về QPixmap kích thước `size` x `size`, hoặc `None` nếu không tìm thấy file hoặc tải thất bại.
     """
     try:
         base = Path(__file__).resolve().parents[1]  # points to src/
         avatar_dir = base / 'assets' / 'avatars'
+        # trỏ tới thư mục chứa ảnh đại diện
         if not avatar_dir.exists():
             return None
         found = None
@@ -52,13 +53,13 @@ def load_avatar_pixmap(user_id, size=44):
 
 
 def load_avatar_for_task(task_data: dict, db=None, size=44):
-    """Try to load an avatar QPixmap for the given task dictionary.
+    """Cố gắng tải QPixmap avatar cho task được cung cấp dưới dạng dict.
 
-    Priority:
-      1) use task_data['assignee_id'] if present
-      2) if not present and db provided, try to map task_data['assignee_name'] -> user_id via DB
-    Returns QPixmap or None.
-    Also logs the candidate paths for debugging.
+    Thứ tự ưu tiên:
+      1) sử dụng `task_data['assignee_id']` nếu có
+      2) nếu không có và `db` được cung cấp, cố gắng ánh xạ `task_data['assignee_name']` -> user_id qua DB
+    Trả về QPixmap hoặc `None`.
+    Cũng ghi log các đường dẫn ứng viên để hỗ trợ gỡ lỗi.
     """
     try:
         assignee_id = None

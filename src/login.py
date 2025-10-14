@@ -16,9 +16,9 @@ from PyQt5.QtGui import QIcon
 
 
 def is_valid_email(email: str) -> bool:
-    """Return True if email matches a reasonable RFC-like pattern (not fully RFC-complete).
+    """Kiểm tra nhanh xem chuỗi email có dạng hợp lệ hay không.
 
-    This is a pragmatic validator for UI input to prevent obvious mistakes.
+    Validator thực tế cho UI, không hoàn chỉnh theo RFC đầy đủ nhưng ngăn lỗi nhập cơ bản.
     """
     if not email or not isinstance(email, str):
         return False

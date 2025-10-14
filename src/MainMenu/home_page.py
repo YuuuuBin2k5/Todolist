@@ -20,7 +20,10 @@ from config import (
 )
 
 def _parse_iso_datetime_module(s: str):
-    """Module-level ISO datetime parser usable by widgets in this file."""
+    """Chuyển chuỗi ISO sang datetime; trả None nếu không parse được.
+
+    Dùng chung cho các widget trong `home_page.py`.
+    """
     if not s:
         return None
     if isinstance(s, datetime):
@@ -160,6 +163,10 @@ class TaskItemWidget(QFrame):
 
 
 class DoNowView(QWidget):
+    """View trang chính (My Tasks) cho người dùng.
+
+    Hiển thị danh sách nhiệm vụ, form thêm nhanh và các bộ lọc.
+    """
     def __init__(self, user_id=None, db=None, parent=None):
         super().__init__(parent)
         self.user_id = user_id

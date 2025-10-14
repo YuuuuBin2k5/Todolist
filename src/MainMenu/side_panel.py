@@ -12,7 +12,7 @@ from config import COLOR_GRAY, COLOR_PRIMARY_BLUE, COLOR_SECONDARY_BLUE, COLOR_B
 from PyQt5.QtCore import Qt, QRectF, pyqtSignal
 
 class ClickableLabel(QLabel):
-    """A QLabel that emits a clicked signal when pressed."""
+    """QLabel có thể bấm được, phát tín hiệu `clicked` khi nhấn chuột."""
     clicked = pyqtSignal()
 
     def mousePressEvent(self, event):

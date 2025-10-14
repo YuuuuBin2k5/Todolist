@@ -308,6 +308,7 @@ class MainWindow(QMainWindow):
             self.login_window.show()
 
     def _load_group_context(self, group_id, group_name):
+        """Thiết lập context khi người dùng chọn 1 nhóm: lưu id, tên, vai trò và cập nhật UI."""
         self.current_view = 'group'
         self.current_group_id = group_id
         self.current_group_name = group_name
@@ -343,9 +344,7 @@ class MainWindow(QMainWindow):
 
     
     def _handle_personal_view(self):
-        """
-            Xử lý việc chuyển đổi sang chế độ xem cá nhân.
-        """
+        """Chuyển UI về chế độ cá nhân và reload dữ liệu tương ứng."""
         self.current_view = 'personal'
         self.current_group_id = None # Reset thông tin nhóm
         self.is_leader_of_current_group = False
@@ -371,10 +370,7 @@ class MainWindow(QMainWindow):
             self.load_personal_tasks()
 
     def _handle_group_view(self):
-        """
-            Xử lý việc chuyển đổi sang chế độ xem nhóm.
-            Mở hộp thoại để người dùng chọn nhóm.
-        """
+        """Mở dialog cho người dùng chọn nhóm, rồi set group context khi có lựa chọn."""
         dialog = GroupSelectionDialog(self.user_id, self)
         if dialog.exec_() == QDialog.Accepted and dialog.selected_group:
             group_id, group_name = dialog.selected_group
@@ -392,9 +388,7 @@ class MainWindow(QMainWindow):
 
 
     def _handle_home_view(self):
-        """
-            Xử lý việc chuyển đổi sang trang chủ.
-        """
+        """Chuyển nội dung chính sang trang Home và cập nhật context cho widget home."""
         self.current_content = 'home'
         self.content_stack.setCurrentWidget(self.home_widget)
         is_leader = self.is_leader_of_current_group if self.current_view == 'group' else False
