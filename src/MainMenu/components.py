@@ -962,7 +962,8 @@ class AddTaskDialog(QDialog):
 
     def _show_priority_menu(self):
         menu = QMenu(self)
-        icon_map = {1: 'flag-red.svg', 2: 'flag-orange.svg', 3: 'flag-yellow.svg', 4: 'flag-grey.svg'}
+        # Use existing icon files in assets/icons; map priorities to available flags
+        icon_map = {1: 'flag-red.svg', 2: 'flag-green.svg', 3: 'flag-blue.svg', 4: 'flag-grey.svg'}
         for p_val in [1, 2, 3, 4]:
             icon_path = os.path.join(ICON_DIR, icon_map.get(p_val, 'flag-grey.svg'))
             action = QAction(QIcon(icon_path), f"Ưu tiên {p_val}", self) if os.path.exists(icon_path) else QAction(f"Ưu tiên {p_val}", self)
@@ -972,7 +973,8 @@ class AddTaskDialog(QDialog):
 
     def _set_priority(self, priority):
         self.current_priority = priority
-        icon_map = {1: 'flag-red.svg', 2: 'flag-orange.svg', 3: 'flag-yellow.svg', 4: 'flag-grey.svg'}
+        # Keep mapping consistent with _show_priority_menu
+        icon_map = {1: 'flag-red.svg', 2: 'flag-green.svg', 3: 'flag-blue.svg', 4: 'flag-grey.svg'}
         icon_path = os.path.join(ICON_DIR, icon_map.get(priority, 'flag-grey.svg'))
         if os.path.exists(icon_path):
             self.priority_button.setIcon(QIcon(icon_path))
