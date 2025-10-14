@@ -8,13 +8,11 @@
 
 from PyQt5.QtWidgets import QFrame, QVBoxLayout, QLabel, QPushButton, QSpacerItem, QSizePolicy, QFileDialog, QHBoxLayout
 from PyQt5.QtGui import QPainter, QBrush, QColor, QPixmap, QPainterPath, QPen
-from config import COLOR_GRAY, COLOR_PRIMARY, COLOR_PRIMARY_BLUE, COLOR_SECONDARY_BLUE, COLOR_TEXT_PRIMARY, COLOR_BORDER, COLOR_HOVER, COLOR_WHITE
-from PyQt5.QtCore import Qt, pyqtSignal, QRectF
-
+from config import COLOR_GRAY, COLOR_PRIMARY_BLUE, COLOR_SECONDARY_BLUE, COLOR_BORDER, COLOR_HOVER, COLOR_WHITE
+from PyQt5.QtCore import Qt, QRectF, pyqtSignal
 
 class ClickableLabel(QLabel):
     """A QLabel that emits a clicked signal when pressed."""
-    from PyQt5.QtCore import pyqtSignal
     clicked = pyqtSignal()
 
     def mousePressEvent(self, event):

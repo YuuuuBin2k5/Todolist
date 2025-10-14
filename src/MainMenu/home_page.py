@@ -8,7 +8,7 @@ from Managers.database_manager import Database
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QLabel, QLineEdit, QScrollArea, QFrame,
                              QGridLayout, QGroupBox, QComboBox, QMessageBox,
-                             QDateTimeEdit, QGraphicsDropShadowEffect, QMenu, QAction, QSizePolicy)
+                             QDateTimeEdit, QGraphicsDropShadowEffect, QMenu, QAction)
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QDateTime
 from PyQt5.QtGui import QIcon, QColor
 

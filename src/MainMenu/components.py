@@ -4,13 +4,13 @@ import locale
 import os
 from datetime import datetime
 from PyQt5.QtWidgets import (QDialog, QFrame, QHBoxLayout, QCheckBox, QLabel, QVBoxLayout,
-                             QApplication, QMenu, QInputDialog, QStyle, QPushButton,
+                            QMenu, QStyle, QPushButton,
                              QScrollArea, QWidget, QLineEdit, QDateTimeEdit, QTextEdit, QDialogButtonBox, QMessageBox,
                              QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QComboBox, QAction, QCalendarWidget, QTimeEdit)
-from PyQt5.QtCore import Qt, QMimeData, QDate, QDateTime, QPropertyAnimation, QEasingCurve
-from PyQt5.QtGui import QDrag, QCursor, QFont, QColor, QFontMetrics, QPainterPath, QIcon
+from PyQt5.QtCore import Qt, QDateTime, QPropertyAnimation, QEasingCurve
+from PyQt5.QtGui import QCursor, QFont, QColor, QFontMetrics, QIcon
 from MainMenu.avatar_utils import load_avatar_pixmap, load_avatar_for_task
-from config import TEXT_MUTED,  COLOR_TEXT_PRIMARY, ACCENT_GROUP, ACCENT_PERSONAL, FONT_UI, PRIORITY_COLORS, ICON_DIR, COLOR_TEXT_SECONDARY, COLOR_SUCCESS, COLOR_PRIMARY_BLUE
+from config import TEXT_MUTED,  COLOR_TEXT_PRIMARY, ACCENT_GROUP, ACCENT_PERSONAL, FONT_UI, PRIORITY_COLORS, ICON_DIR, COLOR_SUCCESS, COLOR_PRIMARY_BLUE
 
 # Thiết lập ngôn ngữ Tiếng Việt để hiển thị đúng Thứ trong tuần
 try:

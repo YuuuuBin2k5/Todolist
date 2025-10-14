@@ -1,20 +1,18 @@
 # -*- coding: utf-8 -*-
-import sys
 import os
-import sqlite3
 import random
 import re
 import smtplib
 import ssl
 from email.message import EmailMessage
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QStackedWidget, QVBoxLayout, 
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QStackedWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QDialog)
 from PyQt5.QtCore import Qt, QPropertyAnimation, QPoint
-# [THAY ĐỔI] Thêm QFont vào đây
-from PyQt5.QtGui import QPixmap, QFont 
+from PyQt5.QtGui import QFont 
 from config import *
 from MainMenu.main_window import MainWindow
 from Managers.database_manager import Database
+from PyQt5.QtGui import QIcon
 
 
 def is_valid_email(email: str) -> bool:
@@ -578,6 +576,9 @@ class LoginRegisterApp(QMainWindow):
                 self._allow_close = True
                 self.close()
                 self.main_window = MainWindow(user_id, user_name)
+                icon_path = os.path.join('src', 'assets', 'images', 'window_icon.png')
+                if os.path.exists(icon_path):
+                    self.main_window.setWindowIcon(QIcon(icon_path))
                 self.main_window.show()
             else:
                 QMessageBox.warning(self, "Lỗi", "Email hoặc mật khẩu không đúng.")

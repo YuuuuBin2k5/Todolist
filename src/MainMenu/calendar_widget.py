@@ -4,10 +4,10 @@ import calendar
 from datetime import datetime, timedelta
 import os
 import logging
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QGridLayout, QApplication, QMessageBox
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QGridLayout
 from PyQt5.QtGui import QFontDatabase, QFont, QGuiApplication
 from PyQt5.QtCore import Qt
-from MainMenu.components import DayWidget, TaskWidget, GroupTaskWidget, TaskBadge
+from MainMenu.components import DayWidget, TaskBadge
 from Managers.database_manager import Database
 from config import (
     CALENDAR_BG_GRADIENT_START, CALENDAR_BG_GRADIENT_END, CALENDAR_MONTH_PILL_START, 

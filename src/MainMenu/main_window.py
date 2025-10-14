@@ -11,7 +11,6 @@ from PyQt5.QtCore import QDate, Qt
 from PyQt5.QtGui import QGuiApplication
 import shutil
 from pathlib import Path
-import os
 
 # --- Nhập các module và widget tùy chỉnh của dự án ---
 from MainMenu.side_panel import SidePanel
@@ -21,7 +20,6 @@ from Managers.database_manager import Database
 from MainMenu.home_page import DoNowView
 from MainMenu.group_dialogs import GroupSelectionDialog, MemberListDialog, AddMemberDialog
 from config import *
-import datetime
 
 
 # ==============================================================================

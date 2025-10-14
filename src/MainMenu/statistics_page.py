@@ -1,4 +1,3 @@
-import sys
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QScrollArea
 from PyQt5.QtCore import Qt
 

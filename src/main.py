@@ -3,6 +3,7 @@ import sys
 import logging
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QFontDatabase, QFont
+from PyQt5.QtGui import QIcon
 from login import LoginRegisterApp
 from config import FONT_PATH
 
@@ -34,6 +35,12 @@ if __name__ == "__main__":
 
     # Tạo và hiển thị cửa sổ đăng nhập
     window = LoginRegisterApp()
+    # Set application/window icon (use bundled icon if available)
+    try:
+        icon_path = 'src/assets/images/window_icon.png'
+        window.setWindowIcon(QIcon(icon_path))
+    except Exception:
+        pass
     window.show()
     
     # Bắt đầu vòng lặp sự kiện

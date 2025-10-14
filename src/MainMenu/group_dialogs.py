@@ -1,4 +1,3 @@
-import os
 from Managers.database_manager import Database
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem, 
                              QPushButton, QInputDialog, QMessageBox, QLabel, QLineEdit)
