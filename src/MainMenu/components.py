@@ -6,7 +6,7 @@ from datetime import datetime
 from PyQt5.QtWidgets import (QDialog, QFrame, QHBoxLayout, QCheckBox, QLabel, QVBoxLayout,
                              QApplication, QMenu, QInputDialog, QStyle, QPushButton,
                              QScrollArea, QWidget, QLineEdit, QDateTimeEdit, QTextEdit, QDialogButtonBox, QMessageBox,
-                             QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QComboBox, QAction)
+                             QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QComboBox, QAction, QCalendarWidget, QTimeEdit)
 from PyQt5.QtCore import Qt, QMimeData, QDate, QDateTime, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QDrag, QCursor, QFont, QColor, QFontMetrics, QPainterPath, QIcon
 from MainMenu.avatar_utils import load_avatar_pixmap, load_avatar_for_task
@@ -807,20 +807,55 @@ class AddTaskDialog(QDialog):
         # Date & time
         date_label = QLabel("Ngày giờ hoàn thành")
         date_label.setStyleSheet(f"color: {title_color}; font-weight:600;")
+        # Date & time widgets: keep date picker and add explicit time selector to the right
         self.date_edit = QDateTimeEdit()
         self.date_edit.setCalendarPopup(True)
-        self.date_edit.setDisplayFormat('yyyy-MM-dd HH:mm:ss')
+        # date_edit will handle date; time is handled by time_edit next to it
+        self.date_edit.setDisplayFormat('yyyy-MM-dd')
         self.date_edit.setFixedHeight(40)
+
+        self.time_edit = QTimeEdit()
+        self.time_edit.setDisplayFormat('HH:mm:ss')
+        self.time_edit.setFixedHeight(40)
+        self.time_edit.setFixedWidth(120)
+
+        # initialize values from default_date if provided
         if default_date:
             dt = QDateTime(default_date.year, default_date.month, default_date.day,
                            default_date.hour if hasattr(default_date, 'hour') else 0,
                            default_date.minute if hasattr(default_date, 'minute') else 0,
                            default_date.second if hasattr(default_date, 'second') else 0)
             self.date_edit.setDateTime(dt)
+            self.time_edit.setTime(dt.time())
         else:
-            self.date_edit.setDateTime(QDateTime.currentDateTime())
+            now = QDateTime.currentDateTime()
+            self.date_edit.setDateTime(now)
+            self.time_edit.setTime(now.time())
+
+        # place them in a single row so the calendar popup is on the left and time on the right
+        date_time_row = QHBoxLayout()
+        date_time_row.setSpacing(8)
+        date_time_row.addWidget(self.date_edit)
+        date_time_row.addWidget(self.time_edit)
         main_layout.addWidget(date_label)
-        main_layout.addWidget(self.date_edit)
+        main_layout.addLayout(date_time_row)
+
+        # Improve calendar popup styling so it's readable on dark themes
+        try:
+            cal = QCalendarWidget()
+            cal.setFirstDayOfWeek(Qt.Monday)
+            cal.setGridVisible(True)
+            # Basic style: white background, dark text, highlighted selection
+            cal.setStyleSheet('''
+                QCalendarWidget { background: #ffffff; color: #222222; }
+                QCalendarWidget QToolButton { background: #f0f0f0; border: none; }
+                QCalendarWidget QAbstractItemView:enabled { background: white; selection-background-color: #1976d2; selection-color: white; }
+                QCalendarWidget QAbstractItemView { color: #222222; }
+                QCalendarWidget QWidget#qt_calendar_navigationbar { background: #f0f0f0; }
+            ''')
+            self.date_edit.setCalendarWidget(cal)
+        except Exception:
+            pass
 
         # Note
         note_label = QLabel("Ghi chú (tùy chọn)")
@@ -831,26 +866,33 @@ class AddTaskDialog(QDialog):
         main_layout.addWidget(note_label)
         main_layout.addWidget(self.note_edit)
 
-        # Estimated time in minutes
-        estimated_label = QLabel("Thời gian ước lượng (phút)")
-        estimated_label.setStyleSheet(f"color: {title_color}; font-weight:600;")
-        self.estimated_input = QLineEdit()
-        self.estimated_input.setPlaceholderText("Nhập số phút ước lượng...")
-        self.estimated_input.setFixedHeight(40)
-        main_layout.addWidget(estimated_label)
-        main_layout.addWidget(self.estimated_input)
+        # Estimated time in minutes and Priority
+        # These are only shown for personal tasks. Group tasks should not expose estimate/priority.
+        if self.mode != 'group':
+            estimated_label = QLabel("Thời gian ước lượng (phút)")
+            estimated_label.setStyleSheet(f"color: {title_color}; font-weight:600;")
+            self.estimated_input = QLineEdit()
+            self.estimated_input.setPlaceholderText("Nhập số phút ước lượng...")
+            self.estimated_input.setFixedHeight(40)
+            main_layout.addWidget(estimated_label)
+            main_layout.addWidget(self.estimated_input)
 
-        # Priority
-        priority_label = QLabel("Độ ưu tiên")
-        priority_label.setStyleSheet(f"color: {title_color}; font-weight:600;")
-        self.priority_button = QPushButton()
-        self.priority_button.setToolTip("Chọn độ ưu tiên")
-        self.priority_button.setFixedHeight(40)
-        self.current_priority = 4  # Default priority
-        self._set_priority(4)  # Set default icon
-        self.priority_button.clicked.connect(self._show_priority_menu)
-        main_layout.addWidget(priority_label)
-        main_layout.addWidget(self.priority_button)
+            # Priority
+            priority_label = QLabel("Độ ưu tiên")
+            priority_label.setStyleSheet(f"color: {title_color}; font-weight:600;")
+            self.priority_button = QPushButton()
+            self.priority_button.setToolTip("Chọn độ ưu tiên")
+            self.priority_button.setFixedHeight(40)
+            self.current_priority = 4  # Default priority
+            self._set_priority(4)  # Set default icon
+            self.priority_button.clicked.connect(self._show_priority_menu)
+            main_layout.addWidget(priority_label)
+            main_layout.addWidget(self.priority_button)
+        else:
+            # ensure attributes exist so other callers can safely read them
+            self.estimated_input = None
+            self.priority_button = None
+            self.current_priority = 4
 
         # Assignee selection: only show when members are provided.
         # members should already be ordered with leader first by the caller.
@@ -883,7 +925,14 @@ class AddTaskDialog(QDialog):
         return self.title_input.text().strip()
 
     def due_datetime(self) -> QDateTime:
-        return self.date_edit.dateTime()
+        try:
+            # combine date from date_edit and time from time_edit into one QDateTime
+            d = self.date_edit.date()
+            t = self.time_edit.time()
+            combined = QDateTime(d, t)
+            return combined
+        except Exception:
+            return self.date_edit.dateTime()
 
     def note(self) -> str:
         return self.note_edit.toPlainText().strip()
@@ -897,11 +946,19 @@ class AddTaskDialog(QDialog):
             return None
 
     def estimated_minutes(self) -> int:
-        estimated = self.estimated_input.text().strip()
-        return int(estimated) if estimated.isdigit() else None
+        try:
+            if not self.estimated_input:
+                return None
+            estimated = self.estimated_input.text().strip()
+            return int(estimated) if estimated.isdigit() else None
+        except Exception:
+            return None
 
     def priority(self) -> int:
-        return self.current_priority
+        try:
+            return int(self.current_priority)
+        except Exception:
+            return 4
 
     def _show_priority_menu(self):
         menu = QMenu(self)

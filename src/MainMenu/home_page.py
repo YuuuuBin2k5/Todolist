@@ -44,7 +44,6 @@ def _parse_iso_datetime_module(s: str):
 class TaskItemWidget(QFrame):
     task_toggled = pyqtSignal(str)
     task_deleted = pyqtSignal(str)
-    task_started = pyqtSignal(str)
 
     def __init__(self, task_data, meta_data, parent=None):
         super().__init__(parent)
@@ -123,10 +122,6 @@ class TaskItemWidget(QFrame):
         action_layout.setAlignment(Qt.AlignRight)
 
         if not is_done:
-            start_btn = self._create_icon_button(os.path.join(ICON_DIR, 'play.svg'), "Start Task", COLOR_PRIMARY)
-            start_btn.clicked.connect(lambda: self.task_started.emit(self.task_id))
-            action_layout.addWidget(start_btn)
-            
             complete_btn = self._create_icon_button(os.path.join(ICON_DIR, 'check-circle.svg'), "Mark as Complete", COLOR_SUCCESS)
             complete_btn.clicked.connect(lambda: self.task_toggled.emit(self.task_id))
             action_layout.addWidget(complete_btn)
@@ -251,12 +246,38 @@ class DoNowView(QWidget):
         self.title_input.returnPressed.connect(self._handle_add_task)
         # expose group container for title changes
         self.group = group
+
+        # initial visibility depending on current view_mode (covers case when widget is created in group mode)
+        try:
+            if getattr(self, 'view_mode', 'personal') == 'group':
+                self.priority_button.hide()
+                self.estimated_input.hide()
+                self.member_selector.show()
+            else:
+                self.priority_button.show()
+                self.estimated_input.show()
+                self.member_selector.hide()
+        except Exception:
+            pass
         return group
 
     def set_view_context(self, mode, group_id=None, is_leader=False):
         self.view_mode = mode
         self.group_id = group_id
         self.is_leader = is_leader
+        # hide priority/estimate for group mode
+        try:
+            if self.view_mode == 'group':
+                self.priority_button.hide()
+                self.estimated_input.hide()
+                # show member selector in group mode
+                self.member_selector.show()
+            else:
+                self.priority_button.show()
+                self.estimated_input.show()
+                self.member_selector.hide()
+        except Exception:
+            pass
         
         if mode == 'personal':
             self.header_label.setText("My Tasks")
@@ -477,7 +498,6 @@ class DoNowView(QWidget):
                 task_widget = TaskItemWidget(task, self.meta.get(task['id']))
                 task_widget.task_toggled.connect(self._handle_toggle_task)
                 task_widget.task_deleted.connect(self._handle_delete_task)
-                task_widget.task_started.connect(self._handle_start_task)
                 self.tasks_layout.addWidget(task_widget)
         self.tasks_layout.addStretch()
         self.page_label.setText(f"Page {self.page}")
@@ -619,9 +639,7 @@ class DoNowView(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Lỗi", f"Không thể xóa nhiệm vụ: {e}")
 
-    def _handle_start_task(self, task_id):
-        self.meta.setdefault(task_id, {})['start'] = time.time()
-        QMessageBox.information(self, "Task Started", "Timer for task has started.")
+    # _handle_start_task removed: start functionality deprecated/removed
 
     def _handle_search_change(self, text):
         self.search_text = text; self.page = 1; self.render_tasks()
