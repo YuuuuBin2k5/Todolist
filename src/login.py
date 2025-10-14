@@ -16,6 +16,19 @@ from config import *
 from MainMenu.main_window import MainWindow
 from Managers.database_manager import Database
 
+
+def is_valid_email(email: str) -> bool:
+    """Return True if email matches a reasonable RFC-like pattern (not fully RFC-complete).
+
+    This is a pragmatic validator for UI input to prevent obvious mistakes.
+    """
+    if not email or not isinstance(email, str):
+        return False
+    email = email.strip()
+    # Basic pattern: local@domain.tld (no spaces), allow common characters
+    pattern = r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
+    return re.match(pattern, email) is not None
+
 # ==========================================================================================
 # LỚP DIALOG MỚI CHO CHỨC NĂNG QUÊN MẬT KHẨU
 # ==========================================================================================
@@ -103,12 +116,36 @@ class ForgotPasswordDialog(QDialog):
         title.setFont(QFont("Arial", 16, QFont.Bold))
         
         self.email_input = QLineEdit(placeholderText="Email")
+        # inline validation label
+        self.email_error_label = QLabel("")
+        self.email_error_label.setStyleSheet('color: red; font-size: 12px;')
+        self.email_error_label.setVisible(False)
         send_code_btn = QPushButton("Gửi mã xác thực")
+        # validate as user types
+        self.email_input.textChanged.connect(self._on_email_input_changed)
         send_code_btn.clicked.connect(self.handle_send_code)
         
         layout.addWidget(title)
         layout.addWidget(self.email_input)
+        layout.addWidget(self.email_error_label)
         layout.addWidget(send_code_btn)
+
+    def _on_email_input_changed(self, text: str):
+        try:
+            txt = (text or '').strip()
+            if not txt:
+                self.email_error_label.setVisible(False)
+                return
+            if not is_valid_email(txt):
+                self.email_error_label.setText("Email không hợp lệ")
+                self.email_error_label.setVisible(True)
+            else:
+                self.email_error_label.setVisible(False)
+        except Exception:
+            try:
+                self.email_error_label.setVisible(False)
+            except Exception:
+                pass
 
     # --- Bước 2: Trang nhập mã xác thực ---
     def setup_code_page(self):
@@ -159,9 +196,13 @@ class ForgotPasswordDialog(QDialog):
 
     # --- Logic xử lý ---
     def handle_send_code(self):
-        self.email = self.email_input.text()
+        self.email = self.email_input.text().strip()
         if not self.email:
             QMessageBox.warning(self, "Lỗi", "Vui lòng nhập email.")
+            return
+        # Validate format first
+        if not is_valid_email(self.email):
+            QMessageBox.warning(self, "Email không hợp lệ", "Vui lòng nhập địa chỉ email hợp lệ.")
             return
         # Kiểm tra email có tồn tại trong CSDL không
         try:
@@ -268,7 +309,13 @@ class LoginRegisterApp(QMainWindow):
         self.stacked_forms.setFixedSize(FORM_WIDTH, CONTAINER_HEIGHT)
         self.stacked_forms.setStyleSheet("background-color: transparent;")
         self.sign_in_form, self.email_input_signin, self.password_input_signin = self.create_form("Đăng Nhập", "hoặc sử dụng mật khẩu email của bạn")
-        self.sign_up_form, self.name_input_signup, self.email_input_signup, self.password_input_signup, self.password_strength_label = self.create_form("Đăng Ký", "hoặc sử dụng email của bạn để đăng ký")
+        self.sign_up_form, self.name_input_signup, self.email_input_signup, self.password_input_signup, self.password_strength_label, self.email_error_label_signup = self.create_form("Đăng Ký", "hoặc sử dụng email của bạn để đăng ký")
+        # wire live validation for signup email
+        try:
+            if getattr(self, 'email_input_signup', None):
+                self.email_input_signup.textChanged.connect(self._on_signup_email_changed)
+        except Exception:
+            pass
         self.stacked_forms.addWidget(self.sign_in_form)
         self.stacked_forms.addWidget(self.sign_up_form)
         self.base_layout.addWidget(self.stacked_forms)
@@ -368,6 +415,11 @@ class LoginRegisterApp(QMainWindow):
             QMessageBox.warning(self, "Lỗi", "Vui lòng điền đầy đủ tất cả các trường.")
             return
 
+        # Validate email format
+        if not is_valid_email(email):
+            QMessageBox.warning(self, "Email không hợp lệ", "Vui lòng nhập địa chỉ email hợp lệ.")
+            return
+
         # Kiểm tra xem mật khẩu có "Rất mạnh" không
         strength, _, missing = self._evaluate_password_strength_detailed(password)
         if strength != "Rất mạnh":
@@ -410,7 +462,12 @@ class LoginRegisterApp(QMainWindow):
         layout.addWidget(subtitle_label)
         email_input = QLineEdit(placeholderText="Email")
         email_input.setStyleSheet(f"padding: 10px; height: 40px; border: none; background-color: {INPUT_BG}; border-radius: 8px;")
+        # inline email error label to show validation messages (hidden by default)
+        email_error_label = QLabel("")
+        email_error_label.setStyleSheet('color: red; font-size: 12px;')
+        email_error_label.setVisible(False)
         layout.addWidget(email_input)
+        layout.addWidget(email_error_label)
         name_input, password_input = None, None
         if "Đăng Ký" in title:
             name_input = QLineEdit(placeholderText="Name")
@@ -446,9 +503,31 @@ class LoginRegisterApp(QMainWindow):
             password_input.returnPressed.connect(button.click)
         layout.addWidget(button, alignment=Qt.AlignCenter)
         if "Đăng Ký" in title:
-            return widget, name_input, email_input, password_input, strength_label
+            # expose the email_error_label so caller can wire live validation
+            return widget, name_input, email_input, password_input, strength_label, email_error_label
         else:
             return widget, email_input, password_input
+
+    def _on_signup_email_changed(self, text: str):
+        try:
+            txt = (text or '').strip()
+            # email_error_label_signup is set in __init__ when creating the signup form
+            if not hasattr(self, 'email_error_label_signup'):
+                return
+            lbl = self.email_error_label_signup
+            if not txt:
+                lbl.setVisible(False)
+                return
+            if not is_valid_email(txt):
+                lbl.setText("Email không hợp lệ")
+                lbl.setVisible(True)
+            else:
+                lbl.setVisible(False)
+        except Exception:
+            try:
+                self.email_error_label_signup.setVisible(False)
+            except Exception:
+                pass
 
     def create_toggle_panel(self, title, subtitle, button_text):
         widget = QWidget()

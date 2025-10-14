@@ -753,7 +753,7 @@ class GroupTaskWidget(TaskWidget):
         self.assignee_name = assignee_name
 
 # ==============================================================================
-# LỚP 5: DayWidget (Phiên bản đầy đủ và đã sửa lỗi)
+# LỚP 5: DayWidget 
 # ==============================================================================
 class AddTaskDialog(QDialog):
     def __init__(self, parent=None, default_date: datetime = None, members: list = None, mode: str = 'personal'):
@@ -761,10 +761,9 @@ class AddTaskDialog(QDialog):
         self.setWindowTitle("✨ Thêm công việc mới")
         self.setMinimumWidth(420)
         self.setObjectName("AddTaskDialog")
-        # --- Styling: different palettes for personal (green) and group (blue) ---
+
         self.mode = mode or 'personal'
         if self.mode == 'group':
-            # blue themed dialog for group tasks
             self.setStyleSheet("""
                 #AddTaskDialog { background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #e8f2ff, stop:1 #eaf6ff); border-radius: 12px; }
                 QLabel#HeaderLabel { font-size:16px; font-weight:700; color:#0d47a1; }
