@@ -1,7 +1,7 @@
 from Managers.database_manager import Database
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem, 
                              QPushButton, QInputDialog, QMessageBox, QLabel, QLineEdit)
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 
 class GroupSelectionDialog(QDialog):
     """Cửa sổ để chọn, tạo và xem các nhóm."""
@@ -110,6 +110,8 @@ class MemberListDialog(QDialog):
 
 class AddMemberDialog(QDialog):
     """Cửa sổ để thêm thành viên mới vào nhóm."""
+    member_added = pyqtSignal()
+
     def __init__(self, group_id, parent=None):
         super().__init__(parent)
         self.group_id = group_id
@@ -140,6 +142,7 @@ class AddMemberDialog(QDialog):
             try:
                 db.add_group_member(self.group_id, user_id_to_add)
                 QMessageBox.information(self, "Thành công", "Đã thêm thành viên mới vào nhóm.")
+                self.member_added.emit()
                 self.accept()
             except Exception as e:
                 QMessageBox.warning(self, "Lỗi", f"Không thể thêm thành viên: {e}")

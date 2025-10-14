@@ -439,6 +439,7 @@ class MainWindow(QMainWindow):
     def _add_member(self):
         if self.current_group_id and self.is_leader_of_current_group:
             dialog = AddMemberDialog(self.current_group_id, self)
+            dialog.member_added.connect(self.home_widget._populate_member_selector)
             dialog.exec_()
 
     def load_personal_tasks(self):
