@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     title TEXT NOT NULL,
     note TEXT,
     is_done INTEGER DEFAULT 0,
-    priority INTEGER NOT NULL DEFAULT 2,
+    priority INTEGER NOT NULL DEFAULT 4,
     estimate_minutes INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     due_at TIMESTAMP,

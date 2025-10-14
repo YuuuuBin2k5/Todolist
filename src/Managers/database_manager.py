@@ -201,7 +201,7 @@ class Database:
         return self._execute_query(query, (group_id,), fetch="all") or []
 
     # ----------------- Công việc nhóm --------------------------
-    def add_group_task(self, group_id: int, creator_id: int, title: str, note: str = "", is_done: int = 0, due_at: Optional[str] = None, assignee_id: Optional[int] = None) -> None:
+    def add_group_task(self, group_id: int, creator_id: int, title: str, note: str = "", is_done: int = 0, due_at: Optional[str] = None, assignee_id: Optional[int] = None, estimated_minutes: Optional[int] = None, priority: int = 4) -> None:
         """Thêm công việc nhóm; assignee_id có thể None.
 
         Không trả về; commit khi thành công.
@@ -221,18 +221,28 @@ class Database:
         has_creator = 'creator_id' in cols or 'leader_id' in cols
         creator_col = 'creator_id' if 'creator_id' in cols else ('leader_id' if 'leader_id' in cols else None)
 
-        if has_creator and creator_col:
-            if due_at is None:
+        has_estimate = 'estimated_minutes' in cols or 'estimate_minutes' in cols
+        estimate_col = 'estimated_minutes' if 'estimated_minutes' in cols else ('estimate_minutes' if 'estimate_minutes' in cols else None)
+
+        has_priority = 'priority' in cols
+
+        if due_at is None:
+            if has_creator and creator_col and has_estimate and estimate_col and has_priority:
+                query = f"INSERT INTO group_tasks (group_id, assignee_id, title, note, is_done, {creator_col}, {estimate_col}, priority, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+                params = (group_id, assignee_id, title, note, is_done, creator_id, estimated_minutes, priority)
+            elif has_creator and creator_col:
                 query = f"INSERT INTO group_tasks (group_id, assignee_id, title, note, is_done, {creator_col}, created_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
                 params = (group_id, assignee_id, title, note, is_done, creator_id)
             else:
-                query = f"INSERT INTO group_tasks (group_id, assignee_id, title, note, is_done, due_at, {creator_col}, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
-                params = (group_id, assignee_id, title, note, is_done, due_at, creator_id)
-        else:
-            # older schema without creator/leader column
-            if due_at is None:
                 query = "INSERT INTO group_tasks (group_id, assignee_id, title, note, is_done, created_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
                 params = (group_id, assignee_id, title, note, is_done)
+        else:
+            if has_creator and creator_col and has_estimate and estimate_col and has_priority:
+                query = f"INSERT INTO group_tasks (group_id, assignee_id, title, note, is_done, due_at, {creator_col}, {estimate_col}, priority, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+                params = (group_id, assignee_id, title, note, is_done, due_at, creator_id, estimated_minutes, priority)
+            elif has_creator and creator_col:
+                query = f"INSERT INTO group_tasks (group_id, assignee_id, title, note, is_done, due_at, {creator_col}, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+                params = (group_id, assignee_id, title, note, is_done, due_at, creator_id)
             else:
                 query = "INSERT INTO group_tasks (group_id, assignee_id, title, note, is_done, due_at, created_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
                 params = (group_id, assignee_id, title, note, is_done, due_at)
@@ -266,7 +276,8 @@ class Database:
 
     def get_task_by_id(self, task_id: int) -> Optional[Tuple]:
         """Lấy task cá nhân theo id. Trả về row hoặc None."""
-        query = "SELECT task_id, user_id, title, note, is_done, due_at FROM tasks WHERE task_id = ?"
+        # include estimate_minutes and priority for UI consumption (backwards compatible)
+        query = "SELECT task_id, user_id, title, note, is_done, due_at, estimate_minutes, priority FROM tasks WHERE task_id = ?"
         return self._execute_query(query, (task_id,), fetch="one")
 
     def get_group_task_by_id(self, task_id: int) -> Optional[Tuple]:
@@ -286,6 +297,17 @@ class Database:
         """Trả về user_name theo user_id hoặc None."""
         res = self.get_user_by_id(user_id)
         return res[1] if res else None
+
+    def get_user_id_by_name(self, user_name: str) -> Optional[int]:
+        """Tìm user_id theo user_name (kết quả đầu tiên). Trả về None nếu không tìm thấy."""
+        try:
+            query = "SELECT user_id FROM users WHERE user_name = ? LIMIT 1"
+            res = self._execute_query(query, (user_name,), fetch="one")
+            if res:
+                return res[0]
+        except sqlite3.Error:
+            pass
+        return None
 
 
     # Thống kê hoàn thành công việc cá nhân

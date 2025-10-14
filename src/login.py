@@ -403,16 +403,6 @@ class LoginRegisterApp(QMainWindow):
         social_layout = QHBoxLayout()
         social_layout.setAlignment(Qt.AlignCenter)
         social_layout.setSpacing(10)
-        social_icons = ["assets/images/google_icon.png", "assets/images/facebook_icon.png", "assets/images/instagram_icon.png", "assets/images/github_icon.png"]
-        for icon_path in social_icons:
-            icon_label = QLabel()
-            icon_pixmap = QPixmap(icon_path)
-            icon_pixmap_scaled = icon_pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            icon_label.setPixmap(icon_pixmap_scaled)
-            icon_label.setFixedSize(40, 40)
-            icon_label.setAlignment(Qt.AlignCenter)
-            icon_label.setStyleSheet(f"border: 1px solid {COLOR_GRAY}; border-radius: 20px;")
-            social_layout.addWidget(icon_label)
         layout.addLayout(social_layout)
         subtitle_label = QLabel(f"<p>{subtitle}</p>")
         subtitle_label.setStyleSheet(f"font-size: 14px; color: {TEXT_MUTED};")

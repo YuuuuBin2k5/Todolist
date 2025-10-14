@@ -1,14 +1,16 @@
 # File: MainMenu/components.py
 
 import locale
+import os
 from datetime import datetime
 from PyQt5.QtWidgets import (QDialog, QFrame, QHBoxLayout, QCheckBox, QLabel, QVBoxLayout,
                              QApplication, QMenu, QInputDialog, QStyle, QPushButton,
                              QScrollArea, QWidget, QLineEdit, QDateTimeEdit, QTextEdit, QDialogButtonBox, QMessageBox,
-                             QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QComboBox)
+                             QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QComboBox, QAction)
 from PyQt5.QtCore import Qt, QMimeData, QDate, QDateTime, QPropertyAnimation, QEasingCurve
-from PyQt5.QtGui import QDrag, QCursor, QFont, QColor, QFontMetrics
-from config import COLOR_WHITE, COLOR_BORDER, TEXT_MUTED, COLOR_PRIMARY, COLOR_TEXT_PRIMARY
+from PyQt5.QtGui import QDrag, QCursor, QFont, QColor, QFontMetrics, QPainterPath, QIcon
+from MainMenu.avatar_utils import load_avatar_pixmap, load_avatar_for_task
+from config import TEXT_MUTED,  COLOR_TEXT_PRIMARY, ACCENT_GROUP, ACCENT_PERSONAL, FONT_UI, PRIORITY_COLORS, ICON_DIR, COLOR_TEXT_SECONDARY, COLOR_SUCCESS, COLOR_PRIMARY_BLUE
 
 # Thiết lập ngôn ngữ Tiếng Việt để hiển thị đúng Thứ trong tuần
 try:
@@ -28,91 +30,246 @@ VIETNAMESE_MONTHS = [
 # ==============================================================================
 class TaskDetailItemWidget(QFrame):
     def __init__(self, task_data: dict, calendar_ref=None, parent=None):
-        """task_data keys: title, is_done, note, assignee_name, due_at, task_id, is_group"""
+        """Modern IT-style task detail card.
+
+        Displays title, status, assignee, due date, note and a delete action.
+        """
         super().__init__(parent)
         self.setObjectName("TaskDetailItem")
         self.setFrameShape(QFrame.StyledPanel)
         self.calendar_ref = calendar_ref
 
         # normalize
-        title = task_data.get('title')
-        is_done = task_data.get('is_done', False)
-        note_text = task_data.get('note', '')
-        assignee = task_data.get('assignee_name')
-        due_at = task_data.get('due_at')
+        title = task_data.get('title') or ''
+        is_done = bool(task_data.get('is_done', False))
+        note_text = task_data.get('note') or ''
+        assignee = task_data.get('assignee_name') or ''
+        due_at = task_data.get('due_at') or ''
         task_id = task_data.get('task_id')
-        is_group = task_data.get('is_group', False)
+        is_group = bool(task_data.get('is_group', False))
 
-        # styling for a clean card-like look
+        # try to fetch latest estimate/priority from DB when possible (only for personal tasks)
+        priority_val = task_data.get('priority')
+        estimate_minutes = task_data.get('estimate_minutes') or task_data.get('estimated_minutes') or task_data.get('estimate')
+        try:
+            # Only query personal tasks from tasks table. Group tasks have different storage and should not be queried here.
+            if not is_group and (priority_val is None or estimate_minutes is None) and self.calendar_ref and hasattr(self.calendar_ref, 'db') and task_id:
+                row = self.calendar_ref.db.get_task_by_id(task_id)
+                # row now expected as (task_id, user_id, title, note, is_done, due_at, estimate_minutes, priority)
+                if row:
+                    # defensive mapping by length
+                    try:
+                        estimate_minutes = estimate_minutes or row[6]
+                        priority_val = priority_val if priority_val is not None else row[7]
+                    except Exception:
+                        if len(row) >= 8:
+                            estimate_minutes = estimate_minutes or row[6]
+                            priority_val = priority_val if priority_val is not None else row[7]
+        except Exception:
+            pass
+
+        accent = ACCENT_GROUP if is_group else ACCENT_PERSONAL
+
+        # modern glassy card with subtle border
         self.setStyleSheet(f"""
-            QFrame#TaskDetailItem {{ background: {COLOR_WHITE}; border: 1px solid {COLOR_BORDER}; border-radius: 10px; padding: 10px; }}
-            QLabel#StatusSmall {{ font-size: 12px; color: {TEXT_MUTED}; }}
-            QLabel#NoteLabelInDialog {{ color: {COLOR_TEXT_PRIMARY}; }}
+            QFrame#TaskDetailItem {{ background: rgba(255,255,255,0.96); border: 1px solid rgba(20,30,40,0.04); border-radius: 12px; }}
+            QLabel#TitleLabel {{ color: {COLOR_TEXT_PRIMARY}; font-weight:700; font-size:13px; }}
+            QLabel#MetaLabel {{ color: {TEXT_MUTED}; font-size:11px; }}
+            QLabel#NoteLabelInDialog {{ color: {TEXT_MUTED}; font-style: italic; }}
+            QPushButton#DeleteIcon {{ background: transparent; border: 1px solid rgba(200,50,50,0.12); border-radius:18px; }}
+            QPushButton#DeleteIcon:hover {{ background: rgba(231,76,60,0.12); }}
         """)
 
-        # Outer horizontal layout: content on left, checkbox column on right
-        outer_layout = QHBoxLayout(self)
-        outer_layout.setContentsMargins(8, 8, 8, 8)
+        # Outer layout: avatar | content | action
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(10, 10, 10, 10)
+        outer.setSpacing(12)
 
-        # Left content (title, info, note, actions)
-        content_layout = QVBoxLayout()
-        content_layout.setSpacing(6)
+        # Avatar / accent block — use shared helper to load circular avatar pixmap
+        avatar = QLabel()
+        avatar.setFixedSize(44, 44)
+        avatar.setAlignment(Qt.AlignCenter)
+        avatar_text = (assignee[:1] or '').upper()
+        avatar.setText(avatar_text)
+        avatar.setStyleSheet(f'background: {accent}; color: white; border-radius: 10px; font-weight:700;')
+        try:
+            pix = None
+            if is_group:
+                # group: prefer assignee (via task_data or DB lookup)
+                if self.calendar_ref and hasattr(self.calendar_ref, 'db'):
+                    pix = load_avatar_for_task(task_data, db=self.calendar_ref.db, size=44)
+                if not pix:
+                    assignee_id = task_data.get('assignee_id')
+                    if assignee_id:
+                        pix = load_avatar_pixmap(assignee_id, size=44)
+            else:
+                # personal: try to load owner avatar if we have a task_id and DB
+                try:
+                    if task_id and self.calendar_ref and hasattr(self.calendar_ref, 'db'):
+                        row = self.calendar_ref.db.get_task_by_id(task_id)
+                        # row format from DB: (task_id, user_id, title, note, is_done, due_at)
+                        if row and len(row) >= 2:
+                            owner_id = row[1]
+                            if owner_id:
+                                pix = load_avatar_pixmap(owner_id, size=44)
+                except Exception:
+                    pass
+
+            if pix:
+                avatar.setPixmap(pix)
+                avatar.setText('')
+                avatar.setStyleSheet('background: transparent;')
+        except Exception:
+            pass
+        outer.addWidget(avatar, 0, Qt.AlignVCenter)
+
+        # Content column
+        col = QVBoxLayout()
+        col.setSpacing(6)
 
         title_lbl = QLabel(title)
-        title_lbl.setFont(QFont("Arial", 11, QFont.Bold))
+        title_lbl.setObjectName('TitleLabel')
         title_lbl.setWordWrap(True)
-        content_layout.addWidget(title_lbl)
+        title_lbl.setFont(QFont(FONT_UI, 12, QFont.Bold))
+        col.addWidget(title_lbl)
 
-        # top info row: assignee, due and small status label
-        info_row = QHBoxLayout()
-        status_label = QLabel("Đã hoàn thành" if is_done else "Chưa hoàn thành")
-        status_label.setObjectName('StatusSmall')
-        status_label.setStyleSheet(f'color: {TEXT_MUTED};')
-        info_row.addWidget(status_label)
-        if assignee:
-            assignee_label = QLabel(f"👤 {assignee}")
-            assignee_label.setStyleSheet(f'color: {COLOR_PRIMARY}; margin-left:8px;')
-            info_row.addWidget(assignee_label)
+        # metadata row: status pill, due, assignee
+        meta_row = QHBoxLayout()
+        # status pill
+        status_lbl = QLabel('Hoàn' if is_done else 'Chưa')
+        status_lbl.setObjectName('MetaLabel')
+        status_lbl.setAlignment(Qt.AlignCenter)
+        # Use a soft gray-white background for the pill; text color indicates state/area
+        gray_bg = '#f5f5f5'
+        if is_done:
+            # completed: use success color for the text
+            status_lbl.setStyleSheet(f'background:{gray_bg}; color:{COLOR_SUCCESS}; padding:4px 8px; border-radius:10px; font-size:11px;')
+        else:
+            # incomplete: personal -> success (green), group -> primary blue
+            text_col = COLOR_PRIMARY_BLUE if is_group else COLOR_SUCCESS
+            status_lbl.setStyleSheet(f'background:{gray_bg}; color:{text_col}; padding:4px 8px; border-radius:10px; font-size:11px;')
+        meta_row.addWidget(status_lbl)
+
+        # priority pill (if available) - show only for personal tasks
+        if not is_group:
+            try:
+                p = int(priority_val) if priority_val is not None else None
+            except Exception:
+                p = None
+            if p is not None:
+                color = PRIORITY_COLORS.get(p, '#808080')
+                pr_lbl = QLabel(f'! P{p}')
+                pr_lbl.setObjectName('MetaLabel')
+                pr_lbl.setAlignment(Qt.AlignCenter)
+                pr_lbl.setStyleSheet(f'background:{color}; color:#fff; padding:4px 8px; border-radius:10px; font-size:11px; margin-left:8px;')
+                meta_row.addWidget(pr_lbl)
+
+            # estimated time (minutes)
+            if estimate_minutes is not None:
+                try:
+                    em = int(estimate_minutes)
+                    # display in human friendly form
+                    if em <= 0:
+                        est_text = '0m'
+                    elif em < 60:
+                        est_text = f'{em}m'
+                    else:
+                        hrs = em // 60
+                        mins = em % 60
+                        est_text = f'{hrs}h{mins:02d}m' if mins else f'{hrs}h'
+                    est_lbl = QLabel(f'⏱ {est_text}')
+                    est_lbl.setObjectName('MetaLabel')
+                    est_lbl.setStyleSheet(f'color: {TEXT_MUTED}; margin-left:8px;')
+                    meta_row.addWidget(est_lbl)
+                except Exception:
+                    pass
+
+        # due date
         if due_at:
-            due_label = QLabel(f"⏰ {due_at}")
-            due_label.setStyleSheet(f'color: {TEXT_MUTED}; margin-left:8px;')
-            info_row.addWidget(due_label)
-        info_row.addStretch()
-        content_layout.addLayout(info_row)
+            due_lbl = QLabel(f'⏰ {due_at}')
+            due_lbl.setObjectName('MetaLabel')
+            due_lbl.setStyleSheet(f'color: {TEXT_MUTED}; margin-left:8px;')
+            meta_row.addWidget(due_lbl)
 
+        # assignee
+        if assignee:
+            who_lbl = QLabel(f'👤 {assignee}')
+            who_lbl.setObjectName('MetaLabel')
+            who_lbl.setStyleSheet(f'color: {TEXT_MUTED}; margin-left:8px;')
+            meta_row.addWidget(who_lbl)
+
+        meta_row.addStretch()
+        col.addLayout(meta_row)
+
+        # note (muted)
         if note_text:
-            note_label = QLabel(f"<b>Ghi chú:</b> {note_text}")
-            note_label.setWordWrap(True)
-            note_label.setObjectName("NoteLabelInDialog")
-            content_layout.addWidget(note_label)
+            note_lbl = QLabel(note_text)
+            note_lbl.setObjectName('NoteLabelInDialog')
+            note_lbl.setWordWrap(True)
+            note_lbl.setStyleSheet(f'color: {TEXT_MUTED};')
+            col.addWidget(note_lbl)
 
-        # actions row (delete only)
-        actions_row = QHBoxLayout()
-        actions_row.addStretch()
-        delete_btn = QPushButton("Xóa")
+        outer.addLayout(col)
+
+        # actions column (delete icon)
+        action_col = QVBoxLayout()
+        action_col.setAlignment(Qt.AlignTop)
+        delete_btn = QPushButton()
+        delete_btn.setObjectName('DeleteIcon')
+        try:
+            icon = self.style().standardIcon(QStyle.SP_TrashIcon)
+            delete_btn.setIcon(icon)
+        except Exception:
+            delete_btn.setText('X')
+        delete_btn.setFixedSize(36, 36)
+        delete_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        action_col.addWidget(delete_btn)
+        outer.addLayout(action_col)
+
+        # delete handler with confirmation
         def do_delete():
             try:
-                if self.calendar_ref and task_id is not None:
-                    success = self.calendar_ref.delete_task(task_id, is_group=is_group)
-                    if not success:
-                        # if deletion failed, show a message and do not close
-                        QMessageBox.warning(self, 'Lỗi', 'Không thể xóa nhiệm vụ (không có quyền hoặc lỗi).')
-                    else:
-                        # close parent dialog or remove widget as appropriate
-                        try:
-                            # if this widget is inside a dialog, close dialog
-                            dlg = self.window()
-                            if isinstance(dlg, QDialog):
-                                dlg.accept()
-                        except Exception:
-                            pass
+                if not (self.calendar_ref and task_id is not None):
+                    return
+                ans = QMessageBox.question(self, 'Xác nhận', 'Bạn có chắc muốn xóa công việc này?', QMessageBox.Yes | QMessageBox.No)
+                if ans != QMessageBox.Yes:
+                    return
+                try:
+                    self.calendar_ref.delete_task(task_id, is_group=is_group)
+                except Exception:
+                    pass
+                try:
+                    self.deleteLater()
+                except Exception:
+                    pass
             except Exception:
                 pass
-        delete_btn.clicked.connect(do_delete)
-        actions_row.addWidget(delete_btn)
-        content_layout.addLayout(actions_row)
 
-        outer_layout.addLayout(content_layout)
+        delete_btn.clicked.connect(do_delete)
+
+    def enterEvent(self, event):
+        try:
+            shadow = QGraphicsDropShadowEffect(self)
+            shadow.setBlurRadius(14)
+            shadow.setOffset(0, 6)
+            shadow.setColor(QColor(0, 0, 0, 60))
+            self.setGraphicsEffect(shadow)
+        except Exception:
+            pass
+        try:
+            super().enterEvent(event)
+        except Exception:
+            pass
+
+    def leaveEvent(self, event):
+        try:
+            self.setGraphicsEffect(None)
+        except Exception:
+            pass
+        try:
+            super().leaveEvent(event)
+        except Exception:
+            pass
 
 # ==============================================================================
 # LỚP BỊ THIẾU SỐ 2: DayDetailDialog
@@ -125,35 +282,67 @@ class DayDetailDialog(QDialog):
         self.setObjectName("DayDetailDialog")
         self.calendar_ref = calendar_ref
 
+
+        # build dialog layout with a modern header
         main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(12, 12, 12, 12)
+        main_layout.setSpacing(12)
 
         day_name = VIETNAMESE_DAYS[full_date.weekday()]
         month_name = VIETNAMESE_MONTHS[full_date.month - 1]
         date_str = f"{day_name}, ngày {full_date.day} {month_name} năm {full_date.year}"
 
-        date_label = QLabel(date_str)
-        date_label.setObjectName("DateHeaderLabel")
-        date_label.setAlignment(Qt.AlignCenter)
-        main_layout.addWidget(date_label)
+        header = QHBoxLayout()
+        title = QLabel(date_str)
+        title.setStyleSheet(f"color: {COLOR_TEXT_PRIMARY}; font-weight:700; font-size:15px;")
+        header.addWidget(title)
+        # task count badge
+        try:
+            cnt = len(tasks_data) if tasks_data else 0
+        except Exception:
+            cnt = 0
+        count_badge = QLabel(f"{cnt} nhiệm vụ")
+        count_badge.setStyleSheet('background:#eef3ff; color:#234; padding:6px 10px; border-radius:12px; font-size:12px;')
+        header.addWidget(count_badge)
+        header.addStretch()
+        # close icon
+        close_btn = QPushButton()
+        try:
+            close_btn.setIcon(self.style().standardIcon(QStyle.SP_DialogCloseButton))
+        except Exception:
+            close_btn.setText('Đóng')
+        close_btn.setFixedSize(34, 34)
+        close_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        close_btn.clicked.connect(self.accept)
+        header.addWidget(close_btn)
+        main_layout.addLayout(header)
 
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_content = QWidget()
         tasks_layout = QVBoxLayout(scroll_content)
         tasks_layout.setAlignment(Qt.AlignTop)
+        tasks_layout.setSpacing(12)
         scroll_area.setWidget(scroll_content)
         main_layout.addWidget(scroll_area)
 
         if tasks_data:
             for tdata in tasks_data:
                 detail_item = TaskDetailItemWidget(tdata, calendar_ref=self.calendar_ref)
+                # add a subtle drop shadow to each card for depth
+                try:
+                    shadow = QGraphicsDropShadowEffect(detail_item)
+                    shadow.setBlurRadius(8)
+                    shadow.setOffset(0, 4)
+                    shadow.setColor(QColor(0, 0, 0, 60))
+                    detail_item.setGraphicsEffect(shadow)
+                except Exception:
+                    pass
                 tasks_layout.addWidget(detail_item)
         else:
-            tasks_layout.addWidget(QLabel("Không có công việc nào trong ngày này."))
-
-        close_button = QPushButton("Đóng")
-        close_button.clicked.connect(self.accept)
-        main_layout.addWidget(close_button, 0, Qt.AlignRight)
+            empty_lbl = QLabel("Không có công việc nào trong ngày này.")
+            empty_lbl.setStyleSheet(f"color: {TEXT_MUTED}; padding: 12px;")
+            tasks_layout.addWidget(empty_lbl)
 
 
 class ElidedLabel(QLabel):
@@ -255,7 +444,7 @@ class TaskBadge(QFrame):
     Provides: title label, optional tooltip (note), and a checkbox that toggles completion
     with permission checks via calendar_ref.
     """
-    def __init__(self, title, color='#66bb6a', note='', assignee_name=None, parent=None, task_id=None, is_group=False, calendar_ref=None):
+    def __init__(self, title, color='#66bb6a', note='', assignee_name=None, parent=None, task_id=None, is_group=False, calendar_ref=None, due_at=None):
         super().__init__(parent)
         self.setObjectName('TaskBadge')
         self.task_id = task_id
@@ -264,12 +453,13 @@ class TaskBadge(QFrame):
         self.note = note
         self.assignee_name = assignee_name
         self.title = title or ''
+        self.due_at = due_at
 
         self.setContentsMargins(0, 0, 0, 0)
         # make badges compact and cap width so long titles don't expand the calendar
-        self.setFixedHeight(36)
-        self.setMinimumHeight(36)
-        # tighter max width to avoid extreme expansion from very long titles
+        self.setFixedHeight(34)
+        self.setMinimumHeight(34)
+        # chỉnh sửa chiều rộng tối đa để phù hợp với thiết kế
         BADGE_MAX_W = 240
         self.setMaximumWidth(BADGE_MAX_W)
             
@@ -386,6 +576,7 @@ class TaskBadge(QFrame):
                         'is_done': bool(self.checkbox.isChecked()),
                         'note': self.note,
                         'assignee_name': self.assignee_name,
+                        'assignee_id': getattr(self, 'assignee_id', None),
                         'due_at': None,
                         'task_id': self.task_id,
                         'is_group': self.is_group
@@ -458,6 +649,25 @@ class TaskBadge(QFrame):
         try:
             if not self.task_id or not self.calendar_ref:
                 return
+
+            # Check if task is in the past and prevent toggling
+            try:
+                if hasattr(self, 'due_at') and self.due_at:
+                    from datetime import datetime
+                    due_date = datetime.strptime(self.due_at, '%Y-%m-%d %H:%M:%S')
+                    if due_date < datetime.now():
+                        QMessageBox.warning(self, "Không thể thay đổi", "Không thể thay đổi trạng thái công việc đã quá hạn.")
+                        # revert immediately
+                        self.checkbox.blockSignals(True)
+                        self.checkbox.setChecked(not bool(is_done))
+                        try:
+                            self.checkbox.setText('✓' if self.checkbox.isChecked() else '')
+                        except Exception:
+                            pass
+                        self.checkbox.blockSignals(False)
+                        return
+            except Exception:
+                pass
 
             # permission check first
             try:
@@ -546,33 +756,48 @@ class GroupTaskWidget(TaskWidget):
 # LỚP 5: DayWidget (Phiên bản đầy đủ và đã sửa lỗi)
 # ==============================================================================
 class AddTaskDialog(QDialog):
-    def __init__(self, parent=None, default_date: datetime = None, members: list = None):
+    def __init__(self, parent=None, default_date: datetime = None, members: list = None, mode: str = 'personal'):
         super().__init__(parent)
         self.setWindowTitle("✨ Thêm công việc mới")
         self.setMinimumWidth(420)
         self.setObjectName("AddTaskDialog")
-
-        # --- Styling (green theme) ---
-        self.setStyleSheet("""
-            #AddTaskDialog { background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #f4fff4, stop:1 #ecffef); border-radius: 12px; }
-            QLabel#HeaderLabel { font-size:16px; font-weight:700; color:#1b5e20; }
-            QLineEdit, QTextEdit, QDateTimeEdit { background: white; border: 1px solid #cfe9cf; border-radius: 8px; padding: 8px; }
-            QLineEdit:focus, QTextEdit:focus, QDateTimeEdit:focus { border: 1px solid #66bb6a; }
-            QPushButton#OkButton { background-color: #28a745; color: white; border-radius: 8px; padding: 8px 14px; }
-            QPushButton#CancelButton { background-color: transparent; color: #2e7d32; border: 1px solid #cfe9cf; border-radius: 8px; padding: 6px 12px; }
-        """)
+        # --- Styling: different palettes for personal (green) and group (blue) ---
+        self.mode = mode or 'personal'
+        if self.mode == 'group':
+            # blue themed dialog for group tasks
+            self.setStyleSheet("""
+                #AddTaskDialog { background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #e8f2ff, stop:1 #eaf6ff); border-radius: 12px; }
+                QLabel#HeaderLabel { font-size:16px; font-weight:700; color:#0d47a1; }
+                QLineEdit, QTextEdit, QDateTimeEdit { background: white; border: 1px solid #d0e6ff; border-radius: 8px; padding: 8px; }
+                QLineEdit:focus, QTextEdit:focus, QDateTimeEdit:focus { border: 1px solid #42a5f5; }
+                QPushButton#OkButton { background-color: #1976d2; color: white; border-radius: 8px; padding: 8px 14px; }
+                QPushButton#CancelButton { background-color: transparent; color: #0d47a1; border: 1px solid #d0e6ff; border-radius: 8px; padding: 6px 12px; }
+            """)
+        else:
+            # green themed dialog for personal tasks (default)
+            self.setStyleSheet("""
+                #AddTaskDialog { background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #f4fff4, stop:1 #ecffef); border-radius: 12px; }
+                QLabel#HeaderLabel { font-size:16px; font-weight:700; color:#1b5e20; }
+                QLineEdit, QTextEdit, QDateTimeEdit { background: white; border: 1px solid #cfe9cf; border-radius: 8px; padding: 8px; }
+                QLineEdit:focus, QTextEdit:focus, QDateTimeEdit:focus { border: 1px solid #66bb6a; }
+                QPushButton#OkButton { background-color: #28a745; color: white; border-radius: 8px; padding: 8px 14px; }
+                QPushButton#CancelButton { background-color: transparent; color: #2e7d32; border: 1px solid #cfe9cf; border-radius: 8px; padding: 6px 12px; }
+            """)
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(12, 12, 12, 12)
         main_layout.setSpacing(10)
-
-        header = QLabel("🪴 Thêm công việc")
+        # Header shows distinct emoji and text for modes to avoid confusion
+        header_text = "🪴 Thêm công việc" if self.mode == 'personal' else "👥 Thêm công việc nhóm"
+        header = QLabel(header_text)
         header.setObjectName("HeaderLabel")
         main_layout.addWidget(header)
 
         # Title
         title_label = QLabel("Tiêu đề")
-        title_label.setStyleSheet("color: #2e7d32; font-weight:600;")
+        # label color adapts to mode
+        title_color = '#2e7d32' if self.mode == 'personal' else '#0d47a1'
+        title_label.setStyleSheet(f"color: {title_color}; font-weight:600;")
         self.title_input = QLineEdit()
         self.title_input.setPlaceholderText("Nhập tiêu đề công việc...")
         self.title_input.setFixedHeight(40)
@@ -581,7 +806,7 @@ class AddTaskDialog(QDialog):
 
         # Date & time
         date_label = QLabel("Ngày giờ hoàn thành")
-        date_label.setStyleSheet("color: #2e7d32; font-weight:600;")
+        date_label.setStyleSheet(f"color: {title_color}; font-weight:600;")
         self.date_edit = QDateTimeEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDisplayFormat('yyyy-MM-dd HH:mm:ss')
@@ -599,18 +824,39 @@ class AddTaskDialog(QDialog):
 
         # Note
         note_label = QLabel("Ghi chú (tùy chọn)")
-        note_label.setStyleSheet("color: #2e7d32; font-weight:600;")
+        note_label.setStyleSheet(f"color: {title_color}; font-weight:600;")
         self.note_edit = QTextEdit()
         self.note_edit.setPlaceholderText("Một vài ghi chú ngắn...")
         self.note_edit.setFixedHeight(90)
         main_layout.addWidget(note_label)
         main_layout.addWidget(self.note_edit)
 
+        # Estimated time in minutes
+        estimated_label = QLabel("Thời gian ước lượng (phút)")
+        estimated_label.setStyleSheet(f"color: {title_color}; font-weight:600;")
+        self.estimated_input = QLineEdit()
+        self.estimated_input.setPlaceholderText("Nhập số phút ước lượng...")
+        self.estimated_input.setFixedHeight(40)
+        main_layout.addWidget(estimated_label)
+        main_layout.addWidget(self.estimated_input)
+
+        # Priority
+        priority_label = QLabel("Độ ưu tiên")
+        priority_label.setStyleSheet(f"color: {title_color}; font-weight:600;")
+        self.priority_button = QPushButton()
+        self.priority_button.setToolTip("Chọn độ ưu tiên")
+        self.priority_button.setFixedHeight(40)
+        self.current_priority = 4  # Default priority
+        self._set_priority(4)  # Set default icon
+        self.priority_button.clicked.connect(self._show_priority_menu)
+        main_layout.addWidget(priority_label)
+        main_layout.addWidget(self.priority_button)
+
         # Assignee selection: only show when members are provided.
         # members should already be ordered with leader first by the caller.
         if members:
             assignee_label = QLabel("Phân công")
-            assignee_label.setStyleSheet("color: #2e7d32; font-weight:600;")
+            assignee_label.setStyleSheet(f"color: {title_color}; font-weight:600;")
             self.assignee_combo = QComboBox()
             try:
                 for mid, mname in members:
@@ -650,6 +896,31 @@ class AddTaskDialog(QDialog):
         except Exception:
             return None
 
+    def estimated_minutes(self) -> int:
+        estimated = self.estimated_input.text().strip()
+        return int(estimated) if estimated.isdigit() else None
+
+    def priority(self) -> int:
+        return self.current_priority
+
+    def _show_priority_menu(self):
+        menu = QMenu(self)
+        icon_map = {1: 'flag-red.svg', 2: 'flag-orange.svg', 3: 'flag-yellow.svg', 4: 'flag-grey.svg'}
+        for p_val in [1, 2, 3, 4]:
+            icon_path = os.path.join(ICON_DIR, icon_map.get(p_val, 'flag-grey.svg'))
+            action = QAction(QIcon(icon_path), f"Ưu tiên {p_val}", self) if os.path.exists(icon_path) else QAction(f"Ưu tiên {p_val}", self)
+            action.triggered.connect(lambda chk, prio=p_val: self._set_priority(prio))
+            menu.addAction(action)
+        menu.exec_(self.priority_button.mapToGlobal(self.priority_button.rect().bottomLeft()))
+
+    def _set_priority(self, priority):
+        self.current_priority = priority
+        icon_map = {1: 'flag-red.svg', 2: 'flag-orange.svg', 3: 'flag-yellow.svg', 4: 'flag-grey.svg'}
+        icon_path = os.path.join(ICON_DIR, icon_map.get(priority, 'flag-grey.svg'))
+        if os.path.exists(icon_path):
+            self.priority_button.setIcon(QIcon(icon_path))
+        self.priority_button.setText(f"P{priority}")
+
 
 class DayWidget(QFrame):
     def __init__(self, date_text, year, month, parent=None, calendar_ref=None):
@@ -662,6 +933,7 @@ class DayWidget(QFrame):
         self.year = year
         self.month = month
         self.calendar_ref = calendar_ref
+        self.is_today = False
 
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setAlignment(Qt.AlignTop)
@@ -671,6 +943,7 @@ class DayWidget(QFrame):
         self.date_label.setObjectName("DateLabel")
         self.date_label.setAlignment(Qt.AlignRight)
         self.date_label.setStyleSheet("background: transparent;")
+        self.date_label.setCursor(QCursor(Qt.PointingHandCursor))
         self.main_layout.addWidget(self.date_label)
 
         # Create a simple container for tasks (no scrolling) so we can display
@@ -680,9 +953,9 @@ class DayWidget(QFrame):
         self.tasks_layout.setAlignment(Qt.AlignTop)
         self.tasks_layout.setContentsMargins(0, 0, 0, 0)
         self.tasks_layout.setSpacing(4)  # spacing between task widgets
-        # make visible/height configurable on the instance (helps testing/user-specific cases)
-        self.MAX_VISIBLE_BADGES = 3
-        self.BADGE_HEIGHT = 36
+        # chiều cao tối đa để hiển thị 3 badges với khoảng cách
+        self.MAX_VISIBLE_BADGES = 2
+        self.BADGE_HEIGHT = 30
         spacing = max(0, self.tasks_layout.spacing())
         visible_height = self.MAX_VISIBLE_BADGES * self.BADGE_HEIGHT + max(0, (self.MAX_VISIBLE_BADGES - 1)) * spacing + 6
         try:
@@ -693,6 +966,27 @@ class DayWidget(QFrame):
         # keep a reference so add_task/others can access the container and adjust if needed
         self.tasks_container = tasks_container
         self.main_layout.addWidget(tasks_container)
+        # overflow footer (separate from the tasks layout) so +N is never clipped
+        try:
+            self._total_tasks = 0
+            self.overflow_footer = QPushButton()
+            self.overflow_footer.setObjectName('OverflowFooter')
+            self.overflow_footer.setProperty('is_overflow_footer', True)
+            self.overflow_footer.setVisible(False)
+            self.overflow_footer.setFixedHeight(self.BADGE_HEIGHT)
+            self.overflow_footer.setCursor(QCursor(Qt.PointingHandCursor))
+            self.overflow_footer.setFlat(True)
+            self.overflow_footer.setStyleSheet('background: #f5f5f5; color: #444; border-radius:8px; padding:6px;')
+            try:
+                self.overflow_footer.clicked.connect(self.open_all_tasks_dialog)
+            except Exception:
+                pass
+            self.main_layout.addWidget(self.overflow_footer)
+        except Exception:
+            # if QPushButton is unavailable for some reason, skip footer
+            self.overflow_footer = None
+        # keep full list of tasks (both visible and hidden) so dialog can list all
+        self._all_task_widgets = []
             
     def _prompt_for_new_task(self):
         # KIỂM TRA QUYỀN TRƯỚC KHI LÀM BẤT CỨ ĐIỀU GÌ
@@ -726,16 +1020,17 @@ class DayWidget(QFrame):
         # Sử dụng self.day để tạo ngày mặc định
         default_date = datetime(self.year, self.month, self.day)
         
-        # SỬA LỖI 2: Truyền tham số bằng từ khóa (keyword arguments)
-        # Prepare member list (for possible assignment) — keep safe in case DB call fails
+        # Prepare member list (for possible assignment) — only for group mode
         members = []
         try:
-            if self.calendar_ref:
+            if self.calendar_ref and self.calendar_ref.current_view_mode == 'group':
                 members = self.calendar_ref._get_current_group_members() or []
         except Exception:
             members = []
 
-        dialog = AddTaskDialog(parent=self, default_date=default_date, members=members)
+        # Pass mode so dialog can style itself separately for personal vs group
+        mode = 'group' if (self.calendar_ref and self.calendar_ref.current_view_mode == 'group') else 'personal'
+        dialog = AddTaskDialog(parent=self, default_date=default_date, members=members if mode == 'group' else None, mode=mode)
 
         # Nếu người dùng nhấn "Thêm" và có nhập tiêu đề
         if dialog.exec_() == QDialog.Accepted and dialog.title():
@@ -746,6 +1041,8 @@ class DayWidget(QFrame):
                 assignee_id = dialog.assignee()
             except Exception:
                 assignee_id = None
+            estimated_minutes = dialog.estimated_minutes()
+            priority = dialog.priority()
 
             if self.calendar_ref:
                 # Dựa vào chế độ xem hiện tại để quyết định thêm việc cá nhân hay nhóm
@@ -753,9 +1050,10 @@ class DayWidget(QFrame):
                     # pass assignee_id (may be None or empty) to add_group_task_to_db
                     self.calendar_ref.add_group_task_to_db(due_datetime_obj, title, assignee_id=assignee_id if assignee_id else None, note_text=note)
                 else:
-                    self.calendar_ref.add_task_to_db(due_datetime_obj, title, note_text=note)
+                    self.calendar_ref.add_task_to_db(due_datetime_obj, title, note_text=note, estimated_minutes=estimated_minutes, priority=priority)
 
     def set_today_highlight(self, enabled=True):
+        self.is_today = enabled
         if enabled:
             self.setStyleSheet(
                 "background-color: rgba(255, 0, 0, 60);"
@@ -768,10 +1066,31 @@ class DayWidget(QFrame):
     def mouseDoubleClickEvent(self, event):
         child_widget = self.childAt(event.pos())
         if child_widget is None or child_widget == self:
-            tasks_data = []
-            for i in range(self.tasks_layout.count()):
-                widget = self.tasks_layout.itemAt(i).widget()
-                # normalize TaskBadge or TaskWidget into dict for dialog
+            self.open_all_tasks_dialog()
+        else:
+            super().mouseDoubleClickEvent(event)
+
+    def mousePressEvent(self, event):
+        # single click on empty area or date label should also open day detail
+        try:
+            if event.button() == Qt.LeftButton:
+                child_widget = self.childAt(event.pos())
+                if child_widget is None or child_widget == self or child_widget == self.date_label:
+                    self.open_all_tasks_dialog()
+                    return
+        except Exception:
+            pass
+        try:
+            super().mousePressEvent(event)
+        except Exception:
+            pass
+
+    def open_all_tasks_dialog(self):
+        # build tasks_data for that day by scanning current tasks_layout
+        tasks_data = []
+        # use the full list so hidden tasks (overflow) are included
+        for widget in getattr(self, '_all_task_widgets', []):
+            try:
                 if widget is None:
                     continue
                 if hasattr(widget, 'task_id'):
@@ -780,16 +1099,24 @@ class DayWidget(QFrame):
                         'is_done': getattr(widget, 'checkbox', None) and getattr(widget.checkbox, 'isChecked', lambda: False)(),
                         'note': getattr(widget, 'note', ''),
                         'assignee_name': getattr(widget, 'assignee_name', None) or None,
+                        'assignee_id': getattr(widget, 'assignee_id', None),
                         'due_at': None,
                         'task_id': getattr(widget, 'task_id', None),
                         'is_group': getattr(widget, 'is_group', False)
                     })
-
-            full_date = datetime(self.year, self.month, self.day)
-            dialog = DayDetailDialog(full_date, tasks_data, calendar_ref=self.calendar_ref, parent=self)
-            dialog.exec_()
-        else:
-            super().mouseDoubleClickEvent(event)
+            except Exception:
+                continue
+        full_date = datetime(self.year, self.month, self.day)
+        dialog = DayDetailDialog(full_date, tasks_data, calendar_ref=self.calendar_ref, parent=self)
+        # Lưu trạng thái ban đầu
+        was_today = self.is_today
+        # Tắt highlight ngày hôm nay khi mở dialog
+        if self.is_today:
+            self.set_today_highlight(False)
+        dialog.exec_()
+        # Bật lại highlight sau khi đóng dialog nếu ban đầu là today
+        if was_today:
+            self.set_today_highlight(True)
 
     def add_task(self, task_widget):
         # If given a TaskBadge, attach day info and limit number displayed with an overflow indicator
@@ -797,6 +1124,11 @@ class DayWidget(QFrame):
             # detect TaskBadge by objectName to support both old QLabel badges and new QFrame-based badges
             is_badge = getattr(task_widget, 'objectName', lambda: '')() == 'TaskBadge'
             if is_badge:
+                # record in full list so open_all_tasks_dialog can include it
+                try:
+                    self._all_task_widgets.append(task_widget)
+                except Exception:
+                    self._all_task_widgets = [task_widget]
                 # set day and calendar_ref if missing
                 if not hasattr(task_widget, 'day'):
                     task_widget.day = self.day
@@ -810,29 +1142,25 @@ class DayWidget(QFrame):
                             pass
                 except Exception:
                     pass
-                # count existing badges
+                # increment total tasks and decide whether to add visibly or update footer
+                try:
+                    self._total_tasks += 1
+                except Exception:
+                    self._total_tasks = 1
+                # count visible badges currently in layout
                 badges = [self.tasks_layout.itemAt(i).widget() for i in range(self.tasks_layout.count()) if self.tasks_layout.itemAt(i).widget() is not None]
                 badge_widgets = [b for b in badges if getattr(b, 'objectName', lambda: '')() == 'TaskBadge']
-                if len(badge_widgets) < 3:
+                if len(badge_widgets) < self.MAX_VISIBLE_BADGES:
                     self.tasks_layout.addWidget(task_widget)
                 else:
-                    # find existing overflow label or create one
-                    overflow = None
-                    for b in badges:
-                        try:
-                            if b.property('is_overflow'):
-                                overflow = b
-                                break
-                        except Exception:
-                            continue
-                    if not overflow:
-                        overflow = QLabel()
-                        overflow.setProperty('is_overflow', True)
-                        overflow.setStyleSheet('background:#ddd; color:#333; padding:4px 8px; border-radius:10px;')
-                        self.tasks_layout.addWidget(overflow)
-                    # update count
-                    prev = int(overflow.text().lstrip('+')) if overflow.text() else 0
-                    overflow.setText(f"+{prev+1}")
+                    # show/update footer instead of putting overflow inside tasks_layout
+                    try:
+                        hidden = max(1, self._total_tasks - self.MAX_VISIBLE_BADGES)
+                        if self.overflow_footer:
+                            self.overflow_footer.setText(f"+{hidden}")
+                            self.overflow_footer.setVisible(True)
+                    except Exception:
+                        pass
             else:
                 # generic widget (TaskWidget or others)
                 self.tasks_layout.addWidget(task_widget)
@@ -849,6 +1177,17 @@ class DayWidget(QFrame):
             w = item.widget()
             if w is not None:
                 w.deleteLater()
+        # reset footer
+        try:
+            self._total_tasks = 0
+            if getattr(self, 'overflow_footer', None):
+                self.overflow_footer.setVisible(False)
+                try:
+                    self.overflow_footer.setText('')
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def dragEnterEvent(self, event):
         # Drag-and-drop disabled: do not accept any external drag events

@@ -540,6 +540,16 @@ class DoNowView(QWidget):
         task = next((t for t in self.tasks if t['id'] == task_id), None)
         if not task: return
         
+        # Check if task is in the past and prevent toggling
+        if task.get('due_at'):
+            try:
+                due_date = self._parse_iso_datetime(task['due_at'])
+                if due_date and due_date < datetime.now():
+                    QMessageBox.warning(self, "Không thể thay đổi", "Không thể thay đổi trạng thái công việc đã quá hạn.")
+                    return
+            except Exception:
+                pass
+        
         new_status = not task['is_done']
         try:
             if self.view_mode == 'personal':

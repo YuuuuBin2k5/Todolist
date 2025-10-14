@@ -21,6 +21,12 @@ COLOR_GRAY = "#cccccc"
 COLOR_SHADOW = "rgba(0, 0, 0, 0.35)"
 # --- Resource paths ---
 FONT_PATH = os.path.join(os.path.dirname(__file__), 'assets', 'fonts', 'BeVietnamPro-Regular.ttf')
+# Preferred UI font (fallback to system if not found)
+FONT_UI = "Segoe UI"
+
+# Accent colors for task detail left bar
+ACCENT_GROUP = "#3f51b5"        # group tasks accent (modern indigo)
+ACCENT_PERSONAL = "#9aa6b2"     # personal tasks accent (muted steel)
 
 # --- Calendar / Theme colors ---
 CALENDAR_BG_GRADIENT_START = "#e6f7ff"

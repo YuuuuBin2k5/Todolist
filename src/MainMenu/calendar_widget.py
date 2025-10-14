@@ -206,6 +206,7 @@ class CalendarWidget(QWidget):
                        self.current_date.month == today.month and
                        day_data == today.day):
                         day_widget.set_today_highlight(True)
+                        day_widget.is_today = True
 
                     # Thêm widget ngày vào lưới tại đúng vị trí hàng (tuần) và cột (thứ)
                     # (đã thêm ở trên)
@@ -325,19 +326,22 @@ class CalendarWidget(QWidget):
                             note_text = t.get('note', '')
                             due_at = t.get('due_at')
                             assignee_name = t.get('assignee_name', '')
-                            # Determine whether this should be treated as a group task.
-                            # In group view, all tasks come from the group table and should be rendered as group tasks
-                            # even if unassigned. Also accept an explicit 'is_group' flag from callers.
+                    
                             is_group_flag = bool(t.get('is_group')) or (self.current_view_mode != 'personal') or bool(assignee_name)
-                            # display a friendly assignee label for unassigned group tasks
+                          
                             assignee_display = assignee_name if assignee_name else ('Chưa phân công' if is_group_flag else '')
                             key = ('id', t['task_id']) if t.get('task_id') else (title, due_at, assignee_display)
                             if key in seen[day]:
                                 continue
                             seen[day].add(key)
-                            # create a visual badge for the calendar tile
+                   
                             if is_group_flag:
-                                badge = TaskBadge(title, color='#5c6bc0', note=note_text, assignee_name=assignee_display, parent=None, task_id=t.get('task_id'), is_group=True, calendar_ref=self)
+                                badge = TaskBadge(title, color='#5c6bc0', note=note_text, assignee_name=assignee_display, parent=None, task_id=t.get('task_id'), is_group=True, calendar_ref=self, due_at=due_at)
+
+                                try:
+                                    badge.assignee_id = t.get('assignee_id')
+                                except Exception:
+                                    pass
                                 try:
                                     # set checked state without emitting toggled signal to avoid recursion
                                     badge.checkbox.blockSignals(True)
@@ -351,7 +355,11 @@ class CalendarWidget(QWidget):
                                     badge.label.setStyleSheet('color:#fff; text-decoration: line-through; font-size:11px;')
                                 day_widget.add_task(badge)
                             else:
-                                badge = TaskBadge(title, color='#66bb6a', note=note_text, parent=None, task_id=t.get('task_id'), is_group=False, calendar_ref=self)
+                                badge = TaskBadge(title, color='#66bb6a', note=note_text, parent=None, task_id=t.get('task_id'), is_group=False, calendar_ref=self, due_at=due_at)
+                                try:
+                                    badge.assignee_id = t.get('assignee_id')
+                                except Exception:
+                                    pass
                                 try:
                                     badge.checkbox.setChecked(bool(is_done))
                                 except Exception:
@@ -519,7 +527,7 @@ class CalendarWidget(QWidget):
 
                                 # Use visual TaskBadge inside calendar tiles; keep TaskWidget for detail dialogs
                                 color = '#66bb6a' if not assignee_name else '#5c6bc0'
-                                badge = TaskBadge(title, color=color, note=note, assignee_name=assignee_name, task_id=t.get('task_id'), is_group=bool(assignee_name), calendar_ref=self)
+                                badge = TaskBadge(title, color=color, note=note, assignee_name=assignee_name, task_id=t.get('task_id'), is_group=bool(assignee_name), calendar_ref=self, due_at=due_at)
                                 # ensure badge checkbox matches DB state and apply done style (block signals while doing so)
                                 try:
                                     badge.checkbox.blockSignals(True)
@@ -535,7 +543,6 @@ class CalendarWidget(QWidget):
                     except Exception as e:
                         logging.exception("Lỗi khi hiển thị task")
                         
-    # ... (các hàm còn lại như clear_calendar, setup_week_headers, prev_month, next_month giữ nguyên) ...
     def clear_calendar(self):
         while self.grid_layout.count():
             item = self.grid_layout.takeAt(0)
@@ -561,7 +568,7 @@ class CalendarWidget(QWidget):
         self.current_date = self.current_date.replace(day=days_in_month) + timedelta(days=1)
         self.populate_calendar()
 
-    def add_task_to_db(self, date_obj, task_desc, note_text=""):
+    def add_task_to_db(self, date_obj, task_desc, note_text="", estimated_minutes=None, priority=4):
         """
         Nhận tín hiệu từ DayWidget để thêm công việc cá nhân vào database.
         """
@@ -575,7 +582,7 @@ class CalendarWidget(QWidget):
             # Use the richer API which supports estimate/priority; keep defaults
             # add_task is a compatibility wrapper but call add_task_with_meta to be explicit
             try:
-                self.db.add_task_with_meta(self.user_id, task_desc, note_text, 0, due_date_str, estimated_minutes=None, priority=2)
+                self.db.add_task_with_meta(self.user_id, task_desc, note_text, 0, due_date_str, estimated_minutes=estimated_minutes, priority=priority)
             except Exception:
                 # fallback to wrapper
                 self.db.add_task(self.user_id, task_desc, note_text, 0, due_date_str)
@@ -606,14 +613,17 @@ class CalendarWidget(QWidget):
                                     continue
                                 # try to normalize
                                 if hasattr(w, 'task_id'):
-                                    title = w.text() if hasattr(w, 'text') else getattr(w, 'label', lambda: '')()
-                                    is_done = getattr(w, 'checkbox', None) and getattr(w.checkbox, 'isChecked', lambda: False)()
-                                    note = getattr(w, 'note', '')
-                                    assignee = getattr(w, 'assignee_name', None)
-                                    tasks_data.append({'title': title, 'is_done': is_done, 'note': note, 'assignee_name': assignee, 'task_id': getattr(w, 'task_id', None), 'is_group': getattr(w, 'is_group', False)})
+                                            title = w.text() if hasattr(w, 'text') else getattr(w, 'label', lambda: '')()
+                                            is_done = getattr(w, 'checkbox', None) and getattr(w.checkbox, 'isChecked', lambda: False)()
+                                            note = getattr(w, 'note', '')
+                                            assignee = getattr(w, 'assignee_name', None)
+                                            # attempt to read assignee_id from the badge/widget (added by calendar when available)
+                                            assignee_id = getattr(w, 'assignee_id', None)
+                                            tasks_data.append({'title': title, 'is_done': is_done, 'note': note, 'assignee_name': assignee, 'assignee_id': assignee_id, 'task_id': getattr(w, 'task_id', None), 'is_group': getattr(w, 'is_group', False)})
                             break
             # open dialog
             full_date = datetime(self.current_date.year, self.current_date.month, day)
+
             dialog = DayDetailDialog(full_date, tasks_data, calendar_ref=self)
             dialog.exec_()
         except Exception as e:
@@ -639,6 +649,7 @@ class CalendarWidget(QWidget):
                     logging.debug("Không thể lấy leader của nhóm trước khi thêm task")
 
                 # db.add_group_task(group_id, creator_id, title, note="", is_done=0, due_at=None, assignee_id=None)
+                # For group tasks we intentionally do not pass estimate/priority - group area does not use them
                 self.db.add_group_task(group_id, self.user_id, task_desc, note_text, 0, due_date_str, assignee_id)
                 # refresh calendar so new task appears with correct group styling
                 self.populate_calendar()
@@ -752,8 +763,14 @@ class CalendarWidget(QWidget):
                 data = self.db.get_task_by_id(task_id)
                 if not data:
                     return False, "Không tìm thấy công việc."
-                # data: (task_id, user_id, title, note, is_done, due_at)
-                _, owner_id, title, note, is_done, due_at = data
+                # data may be one of several shapes depending on DB: older code used
+                # (task_id, user_id, title, note, is_done, due_at)
+                # newer getter returns (task_id, user_id, title, note, is_done, due_at, estimate_minutes, priority)
+                try:
+                    owner_id = data[1]
+                except Exception:
+                    # defensive fallback
+                    owner_id = None
                 if owner_id == self.user_id:
                     return True, ""
                 return False, "Bạn chỉ có thể thay đổi công việc của chính mình."

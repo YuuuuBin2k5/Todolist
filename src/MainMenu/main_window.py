@@ -12,7 +12,6 @@ from PyQt5.QtGui import QGuiApplication
 import shutil
 from pathlib import Path
 import os
-import logging
 
 # --- Nhập các module và widget tùy chỉnh của dự án ---
 from MainMenu.side_panel import SidePanel
@@ -155,11 +154,7 @@ class MainWindow(QMainWindow):
                 self.home_widget.load_data_from_db()
         except Exception:
             pass
-        # Log initial window size after loading data for diagnostics
-        try:
-            self._log_window_size(event_note='init_load')
-        except Exception:
-            pass
+
 
     def initUI(self):
         """
@@ -268,7 +263,6 @@ class MainWindow(QMainWindow):
                         pass
                 except Exception:
                     pass
-            self._log_window_size(event_note='show')
         except Exception:
             pass
 
@@ -346,106 +340,14 @@ class MainWindow(QMainWindow):
                 self.calendar_widget.switch_view_mode('group')
             except Exception:
                 pass
-        # Log size when switching to group context for diagnostics
-        try:
-            self._log_window_size(event_note=f'load_group_{self.current_group_id}')
-        except Exception:
-            pass
+  
 
-    def _log_window_size(self, event_note=''):
-        """Append a small diagnostic record with timestamp, user and window geometry."""
-        try:
-            assets_dir = Path(os.path.dirname(os.path.dirname(__file__))) / 'assets'
-            assets_dir.mkdir(parents=True, exist_ok=True)
-            log_path = assets_dir / 'window_sizes.log'
-            w = self.frameGeometry().width()
-            h = self.frameGeometry().height()
-            # screen / DPI info
-            try:
-                screen = QGuiApplication.primaryScreen()
-                screen_geo = screen.availableGeometry() if screen else None
-                screen_w = screen_geo.width() if screen_geo else 0
-                screen_h = screen_geo.height() if screen_geo else 0
-                dpr = screen.devicePixelRatio() if screen else 1
-            except Exception:
-                screen_w = screen_h = dpr = 0
-            # window state
-            try:
-                is_max = bool(self.isMaximized())
-                is_full = bool(self.isFullScreen())
-            except Exception:
-                is_max = is_full = False
-            # sizes of important child widgets
-            try:
-                content_sz = self.content_stack.frameGeometry() if hasattr(self, 'content_stack') else None
-                content_w = content_sz.width() if content_sz else 0
-                content_h = content_sz.height() if content_sz else 0
-            except Exception:
-                content_w = content_h = 0
-            # sizeHint / minimumSizeHint diagnostics for content and key children
-            try:
-                content_hint = self.content_stack.sizeHint() if hasattr(self, 'content_stack') else None
-                content_hint_w = content_hint.width() if content_hint else 0
-                content_hint_h = content_hint.height() if content_hint else 0
-                content_min = self.content_stack.minimumSizeHint() if hasattr(self, 'content_stack') else None
-                content_min_w = content_min.width() if content_min else 0
-                content_min_h = content_min.height() if content_min else 0
-            except Exception:
-                content_hint_w = content_hint_h = content_min_w = content_min_h = 0
-            try:
-                side_sz = self.side_panel.frameGeometry() if hasattr(self, 'side_panel') else None
-                side_w = side_sz.width() if side_sz else 0
-                side_h = side_sz.height() if side_sz else 0
-            except Exception:
-                side_w = side_h = 0
-            # home widget diagnostics
-            try:
-                hw = getattr(self, 'home_widget', None)
-                hw_hint = hw.sizeHint() if hw else None
-                hw_hint_w = hw_hint.width() if hw_hint else 0
-                hw_hint_h = hw_hint.height() if hw_hint else 0
-            except Exception:
-                hw_hint_w = hw_hint_h = 0
-            try:
-                tasks_c = getattr(hw, 'tasks_container', None)
-                tc_hint = tasks_c.sizeHint() if tasks_c else None
-                tc_hint_w = tc_hint.width() if tc_hint else 0
-                tc_hint_h = tc_hint.height() if tc_hint else 0
-            except Exception:
-                tc_hint_w = tc_hint_h = 0
-            # calendar widget diagnostics
-            try:
-                cal = getattr(self, 'calendar_widget', None)
-                cal_hint = cal.sizeHint() if cal else None
-                cal_hint_w = cal_hint.width() if cal_hint else 0
-                cal_hint_h = cal_hint.height() if cal_hint else 0
-            except Exception:
-                cal_hint_w = cal_hint_h = 0
-            now = datetime.datetime.utcnow().isoformat() + 'Z'
-            user_info = f"user_id={self.user_id};user_name={self.user_name}"
-            content = (
-                f"{now}\t{event_note}\t{user_info}\twidth={w}\theight={h}"
-                f"\tscreen={screen_w}x{screen_h}\tdpr={dpr}\tis_max={is_max}\tis_full={is_full}"
-                f"\tcontent={content_w}x{content_h}\tside={side_w}x{side_h}"
-                f"\tcontent_hint={content_hint_w}x{content_hint_h}\tcontent_min={content_min_w}x{content_min_h}"
-                f"\thome_hint={hw_hint_w}x{hw_hint_h}\ttasks_hint={tc_hint_w}x{tc_hint_h}\tcal_hint={cal_hint_w}x{cal_hint_h}"
-                f"\n"
-            )
-            with open(log_path, 'a', encoding='utf-8') as f:
-                f.write(content)
-            # also echo to stdout so running the app shows the record in console
-            try:
-                logging.debug('WINDOW_LOG: %s', content.strip())
-            except Exception:
-                pass
-        except Exception:
-            pass
+
     
     def _handle_personal_view(self):
         """
             Xử lý việc chuyển đổi sang chế độ xem cá nhân.
         """
-        logging.debug("Chuyển sang khu vực cá nhân...")
         self.current_view = 'personal'
         self.current_group_id = None # Reset thông tin nhóm
         self.is_leader_of_current_group = False
@@ -475,7 +377,6 @@ class MainWindow(QMainWindow):
             Xử lý việc chuyển đổi sang chế độ xem nhóm.
             Mở hộp thoại để người dùng chọn nhóm.
         """
-        logging.debug("Chuyển sang khu vực nhóm...")
         dialog = GroupSelectionDialog(self.user_id, self)
         if dialog.exec_() == QDialog.Accepted and dialog.selected_group:
             group_id, group_name = dialog.selected_group
@@ -496,7 +397,6 @@ class MainWindow(QMainWindow):
         """
             Xử lý việc chuyển đổi sang trang chủ.
         """
-        logging.debug("Chuyển sang trang chủ...")
         self.current_content = 'home'
         self.content_stack.setCurrentWidget(self.home_widget)
         is_leader = self.is_leader_of_current_group if self.current_view == 'group' else False
@@ -519,7 +419,6 @@ class MainWindow(QMainWindow):
         """
             Xử lý việc chuyển đổi sang lịch.
         """
-        logging.debug("Chuyển sang lịch...")
         self.current_content = 'calendar'
         self.content_stack.setCurrentWidget(self.calendar_widget)
         is_leader = self.is_leader_of_current_group if self.current_view == 'group' else False
@@ -612,7 +511,8 @@ class MainWindow(QMainWindow):
                             'is_done': is_done,
                             'note': note,
                             'due_at': due_at_str,
-                            'assignee_name': assignee_name
+                            'assignee_name': assignee_name,
+                            'assignee_id': assignee_id
                         })
 
             self.calendar_widget.populate_calendar(tasks_by_day)
@@ -623,7 +523,6 @@ class MainWindow(QMainWindow):
         """
         Hiển thị trang thống kê công việc cá nhân VÀ chi tiết từng nhóm.
         """
-        logging.debug("Chuyển sang trang Thống kê chi tiết...")
         
         if self.current_view != 'personal':
             self._handle_personal_view()
